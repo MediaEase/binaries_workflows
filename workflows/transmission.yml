@@ -1,0 +1,359 @@
+name: Compile Transmission
+
+permissions: write-all
+
+on:
+  schedule:
+    - cron: "0 15 */2 * *"
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/transmission.yml'
+
+jobs:
+  transmission:
+    runs-on: ubuntu-24.04
+
+    strategy:
+      max-parallel: 1
+      matrix:
+        build_type: [release, nightly]
+
+    env:
+      REPO_PATH: "${{ github.workspace }}/binaries"
+      CURRENT_TRANSMISSION_PATH: "${{ github.workspace }}/binaries/dist/current/transmission"
+      ARCHIVE_TRANSMISSION_PATH: "${{ github.workspace }}/binaries/dist/archive/transmission"
+      POOL_PATH: "${{ github.workspace }}/binaries/dist/pool"
+      SCRIPTS_PATH: "${{ github.workspace }}/binaries/scripts"
+      TIME_DIFF: 48000  # hours
+
+    steps:
+      - name: Update packages
+        run: |
+          sudo apt-get update --fix-missing
+
+      - uses: tecolicom/actions-use-apt-tools@v1
+        with:
+          tools: build-essential cmake pkg-config libcurl4-openssl-dev libpsl5 psl libpsl-dev dhtnode libssl-dev libevent-dev libminiupnpc-dev libsystemd-dev zlib1g-dev libnatpmp-dev intltool autoconf automake libtool unzip zip jq
+          cache: false
+
+      - name: Checkout Binaries Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: ${{ env.REPO_PATH }}
+
+      - name: Determine Transmission Version and Updates
+        id: transmission_update
+        env:
+          build_type: ${{ matrix.build_type }}
+          time_diff: ${{ env.TIME_DIFF }}
+        run: |
+          set -e
+          CURRENT_TIME=$(date +%s)
+          BUILD_TYPE="${build_type}"
+          if [ "$BUILD_TYPE" == "release" ]; then
+            LATEST_TAG=$(curl -s https://api.github.com/repos/transmission/transmission/releases/latest | jq -r .tag_name)
+            if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" == "null" ]; then
+              echo "Failed to get the latest release tag."
+              echo "update_needed=false" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            TRANSMISSION_VERSION=${LATEST_TAG#v}
+            PACKAGE_SUFFIX=""
+            REPO_URL="https://github.com/transmission/transmission"
+            REF="$LATEST_TAG"
+          elif [ "$BUILD_TYPE" == "nightly" ]; then
+            PACKAGE_SUFFIX="-nightly"
+            TRANSMISSION_VERSION="nightly"
+            REPO_URL="https://github.com/transmission/transmission"
+            REF="main"
+          else
+            echo "Invalid build type: $BUILD_TYPE"
+            exit 1
+          fi
+          # Checkout Transmission repository with submodules
+          git clone --depth 1 --branch "$REF" --recurse-submodules "$REPO_URL" ${{ github.workspace }}/Transmission
+          git -C ${{ github.workspace }}/Transmission submodule update --init --recursive
+          cd ${{ github.workspace }}/Transmission
+          LATEST_COMMIT_SHA=$(git rev-parse HEAD)
+          COMMIT_DATE=$(git show -s --format=%ci "${LATEST_COMMIT_SHA}")
+          if [ -z "$COMMIT_DATE" ]; then
+            echo "Warning: Unable to fetch the latest commit date for SHA '${LATEST_COMMIT_SHA}'. Assuming no updates."
+            echo "update_needed=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          COMMIT_EPOCH=$(date -d "$COMMIT_DATE" +%s)
+          TIME_DIFF_HOURS=$(( (CURRENT_TIME - COMMIT_EPOCH) / 3600 ))
+          echo "Latest commit was $TIME_DIFF_HOURS hours ago."
+          if (( TIME_DIFF_HOURS <= ${time_diff} )); then
+            UPDATE_NEEDED=true
+            echo "Recent commit detected. Proceeding with build."
+          else
+            UPDATE_NEEDED=false
+            echo "No recent commits in the last ${time_diff} hours. Skipping build."
+            echo "update_needed=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          if [ "$BUILD_TYPE" == "release" ]; then
+            BASE_VERSION="$TRANSMISSION_VERSION"
+          else
+            MAJOR_VERSION=$(grep -Eo 'set\(TR_VERSION_MAJOR "[^"]*"\)' CMakeLists.txt | sed -E 's/.*"([0-9]+)".*/\1/')
+            MINOR_VERSION=$(grep -Eo 'set\(TR_VERSION_MINOR "[^"]*"\)' CMakeLists.txt | sed -E 's/.*"([0-9]+)".*/\1/')
+            PATCH_VERSION=$(grep -Eo 'set\(TR_VERSION_PATCH "[^"]*"\)' CMakeLists.txt | sed -E 's/.*"([0-9]+)".*/\1/')
+            BASE_VERSION="${MAJOR_VERSION}.${MINOR_VERSION}.${PATCH_VERSION}"
+            BUILD_METADATA="~git${LATEST_COMMIT_SHA:0:7}"
+          fi
+          PACKAGE_NAME="transmission"
+          ARCHITECTURE="amd64"
+          CURRENT_DATE=$(date +%Y-%m-%d)
+          BUILD_NUMBER=$(bash ${{ env.SCRIPTS_PATH }}/increment_revision.sh "$PACKAGE_NAME${PACKAGE_SUFFIX}" "$BASE_VERSION" "${{ env.CURRENT_TRANSMISSION_PATH }}")
+          FULL_VERSION="${BASE_VERSION}-1${BUILD_NUMBER}"
+          COMMIT_MESSAGE="Update Transmission${PACKAGE_SUFFIX} to v${BASE_VERSION} [automated]"
+          TMP_DIR=$(mktemp -d)
+          TMP_DIR=${TMP_DIR##*tmp.}
+          TMP_DIR="${{ env.REPO_PATH }}/$TMP_DIR"
+          mkdir -p $TMP_DIR
+          INSTALL_DIR="${{ env.REPO_PATH }}/install"
+          variables=(UPDATE_NEEDED TMP_DIR INSTALL_DIR PACKAGE_NAME BASE_VERSION FULL_VERSION BUILD_NUMBER COMMIT_MESSAGE CURRENT_DATE BUILD_TYPE PACKAGE_SUFFIX LATEST_COMMIT_SHA ARCHITECTURE)
+          variables_sorted=($(printf "%s\n" "${variables[@]}" | sort))
+          for variable in "${variables_sorted[@]}"; do
+            lower_variable=$(echo "$variable" | tr '[:upper:]' '[:lower:]')
+            upper_variable=$(echo "$variable" | tr '[:lower:]' '[:upper:]')
+            value="${!variable}"
+            echo "${upper_variable} : ${value}"
+            echo "${lower_variable}=${value}" >> $GITHUB_OUTPUT
+          done
+
+      - name: Compile and Install Transmission
+        id: transmission_build
+        if: steps.transmission_update.outputs.update_needed == 'true'
+        env:
+          install_dir: ${{ steps.transmission_update.outputs.install_dir }}
+        run: |
+          set -e
+          cd ${{ github.workspace }}/Transmission
+          mkdir -p build
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_DAEMON=ON \
+            -DENABLE_GTK=OFF \
+            -DENABLE_QT=OFF \
+            -DENABLE_UTILS=ON \
+            -DENABLE_CLI=ON \
+            -DENABLE_TESTS=OFF \
+            -DINSTALL_LIB=ON \
+            -DCMAKE_INSTALL_PREFIX="/usr" \
+            -DRUN_CLANG_TIDY=OFF
+          cmake --build build --parallel $(nproc)
+          DESTDIR="${install_dir}" cmake --install build
+          find "${install_dir}" -type f -executable -exec strip --strip-unneeded {} + || true
+          echo "transmission_compiled=true" >> $GITHUB_OUTPUT
+
+      - name: Generate Deb Files and Package Data
+        id: generate_deb_files
+        if: steps.transmission_build.outputs.transmission_compiled == 'true'
+        env:
+          base_version: ${{ steps.transmission_update.outputs.base_version }}
+          full_version: ${{ steps.transmission_update.outputs.full_version }}
+          package_suffix: ${{ steps.transmission_update.outputs.package_suffix }}
+          current_date: ${{ steps.transmission_update.outputs.current_date }}
+          install_dir: ${{ steps.transmission_update.outputs.install_dir }}
+          tmp_dir: ${{ steps.transmission_update.outputs.tmp_dir }}
+          pool_path: ${{ env.POOL_PATH }}
+          scripts_path: ${{ env.SCRIPTS_PATH }}
+          architecture: ${{ steps.transmission_update.outputs.architecture }}
+          output_dir: ${{ github.workspace }}/outputs
+          LOCAL_PACKAGE_PATH: ${{ env.CURRENT_TRANSMISSION_PATH }}
+        run: |
+          set -e
+          mkdir -p "${output_dir}"
+          artifacts_dir="${{ github.workspace }}/artifacts"
+          mkdir -p "${artifacts_dir}"
+          PACKAGE_NAMES=("transmission-common" "transmission-cli")
+          for PACKAGE in "${PACKAGE_NAMES[@]}"; do
+            PACKAGE_NAME="${PACKAGE}"
+            PACKAGE_NAME_WITH_SUFFIX="${PACKAGE}${package_suffix}"
+            PACKAGE_FILE_NAME="${PACKAGE}${package_suffix}"
+            cd "${tmp_dir}"
+            sudo apt-get update
+            apt-get download "${PACKAGE_NAME}"
+            bash "${scripts_path}/generate_control.sh" \
+              "${PACKAGE_NAME}" \
+              "${install_dir}" \
+              "${tmp_dir}" \
+              "${full_version}" \
+              "${current_date}" \
+              "${pool_path}" \
+              "${package_suffix}" \
+              "${LOCAL_PACKAGE_PATH}"
+            echo "build manifest-update file"
+            checksum_file="${tmp_dir}/checksums/${PACKAGE_NAME_WITH_SUFFIX}.sha256"
+            echo "checksum file: ${checksum_file}"
+            cat "${checksum_file}"
+            checksum=$(cat "${checksum_file}" | awk -F':' '{print $2}' | xargs)
+            package_var="$(echo "${PACKAGE_FILE_NAME}" | sed 's/[-.]/_/g')"
+            echo "${package_var}_checksum=${checksum}" >> $GITHUB_OUTPUT
+            echo "${package_var}_name=${PACKAGE_FILE_NAME}" >> $GITHUB_OUTPUT
+            echo "${package_var}_version=${full_version}" >> $GITHUB_OUTPUT
+            echo "{
+                \"package_name\": \"${PACKAGE_FILE_NAME}\",
+                \"checksum\": \"${checksum}\",
+                \"version\": \"${full_version}\",
+                \"category\": \"transmission\",
+                \"build_date\": \"${current_date}\"
+              }" > "${tmp_dir}/${PACKAGE_FILE_NAME}.json"
+            echo "Uploading artifact for ${PACKAGE_NAME_WITH_SUFFIX}"
+            mkdir -p "${artifacts_dir}/${PACKAGE_NAME_WITH_SUFFIX}"
+            cp "${tmp_dir}/${PACKAGE_NAME_WITH_SUFFIX}.json" "${artifacts_dir}/${PACKAGE_NAME_WITH_SUFFIX}/"
+            file=$(find ${pool_path} -type f -name "${PACKAGE_NAME}*")
+            cp "${file}" "${artifacts_dir}/${PACKAGE_NAME_WITH_SUFFIX}/"
+            ls -al "${artifacts_dir}/${PACKAGE_NAME_WITH_SUFFIX}/"
+            tar -czf "${artifacts_dir}/${PACKAGE_NAME_WITH_SUFFIX}.tar.gz" -C "${artifacts_dir}" "${PACKAGE_NAME_WITH_SUFFIX}"
+            rm -rf "${artifacts_dir:?}/${PACKAGE_NAME_WITH_SUFFIX}"
+            echo "Uploaded artifact for ${PACKAGE_NAME_WITH_SUFFIX}" 
+          done
+          echo "transmission_packaged=true" >> $GITHUB_OUTPUT
+
+      - name: Upload Package Data
+        if: steps.generate_deb_files.outputs.transmission_packaged == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: transmission-${{ matrix.build_type }}
+          path: ${{ github.workspace }}/artifacts
+
+  commit_and_push:
+    needs: transmission
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Binaries Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: ${{ github.workspace }}/binaries
+
+      - name: Download Package Data Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ github.workspace }}/outputs
+
+      - name: Extract Package Data Artifacts
+        run: |
+          set -e
+          output_dir="${{ github.workspace }}/outputs"
+          find "${output_dir}" -type f -name "*.tar.gz" -exec tar -xzf {} -C "${output_dir}" \;
+
+      - name: Archive and Upload Transmission Packages
+        env:
+          REPO_PATH: "${{ github.workspace }}/binaries"
+          CURRENT_TRANSMISSION_PATH: "${{ github.workspace }}/binaries/dist/current/transmission"
+          ARCHIVE_TRANSMISSION_PATH: "${{ github.workspace }}/binaries/dist/archive/transmission"
+          POOL_PATH: "${{ github.workspace }}/binaries/dist/pool"
+          SCRIPTS_PATH: "${{ github.workspace }}/binaries/scripts"
+        run: |
+          set -e
+          mkdir -p "${POOL_PATH}"
+          output_dir="${{ github.workspace }}/outputs"
+          for deb_file in $(find "${output_dir}" -type f -name "*.deb"); do
+            cp "${deb_file}" "${POOL_PATH}/"
+            PACKAGE_PATH="${POOL_PATH}/$(basename "${deb_file}")"
+            bash "${SCRIPTS_PATH}/archive_packages.sh" \
+              "${CURRENT_TRANSMISSION_PATH}" \
+              "${ARCHIVE_TRANSMISSION_PATH}" \
+              "${PACKAGE_PATH}"
+          done
+
+      - name: Build Commit Message
+        id: build_commit_message
+        run: |
+          set -e 
+          output_dir="${{ github.workspace }}/outputs"
+          commit_description=""
+          for json_file in $(find "${output_dir}" -type f -name "*.json"); do
+            package_data=$(cat "${json_file}")
+            package_name=$(echo "${package_data}" | jq -r '.package_name')
+            package_version=$(echo "${package_data}" | jq -r '.version')
+            commit_description="${commit_description}
+            - ${package_name} updated to ${package_version}"
+          done
+          commit_message="Update Transmission packages [automated]"
+          echo "Commit message is:"
+          echo "${commit_message}${commit_description}"
+          echo "commit_message<<EOF" >> $GITHUB_OUTPUT
+          echo "${commit_message}${commit_description}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Commit and Push Transmission Packages
+        uses: EndBug/add-and-commit@v9
+        env:
+          commit_message: "${{ steps.build_commit_message.outputs.commit_message }}"
+          author_email: "${{ secrets.COMMITER_EMAIL }}"
+          author_name: "${{ secrets.COMMITER_NAME }}"
+        with:
+          author_name: "${{ env.author_name }}"
+          author_email: "${{ env.author_email }}"
+          default_author: user_info
+          message: ${{ env.commit_message }}
+          cwd: "./binaries"
+          add: |
+            dist/current/transmission/
+            dist/archive/transmission/
+          push: true
+          pull: "--rebase --autostash"
+
+  trigger_manifest_update:
+    needs: [transmission, commit_and_push]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Binaries Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: ${{ github.workspace }}/binaries
+
+      - name: Download Package Data Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ github.workspace }}/outputs
+
+      - name: Extract Package Data Artifacts
+        run: |
+          set -e
+          output_dir="${{ github.workspace }}/outputs"
+          find "${output_dir}" -type f -name "*.tar.gz" -exec tar -xzf {} -C "${output_dir}" \;
+
+      - name: Collect Outputs
+        id: collect_outputs
+        run: |
+          set -e
+          output_dir="${{ github.workspace }}/outputs"
+          manifest_updates="{\"package_updates\": {}}"
+          for json_file in $(find "${output_dir}" -type f -name "*.json"); do
+            package_data=$(cat "${json_file}")
+            package_name=$(echo "${package_data}" | jq -r '.package_name')
+            manifest_updates=$(echo "${manifest_updates}" | jq ".package_updates += {\"${package_name}\": ${package_data}}")
+          done
+          echo "${manifest_updates}" > "${output_dir}/manifest_updates.json"
+          echo "manifest_updates<<EOF" >> $GITHUB_OUTPUT
+          echo "${manifest_updates}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Trigger Update Manifest Workflow
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          event-type: update-manifest
+          client-payload: ${{ steps.collect_outputs.outputs.manifest_updates }}
+
+      - name: Trigger Create Release Workflow
+        uses: peter-evans/repository-dispatch@v3
+        env:
+          package_name: "transmission${{ steps.transmission_update.outputs.package_suffix }}"
+          package_version: ${{ steps.transmission_update.outputs.full_version }}
+        with:
+          event-type: create-release
+          client-payload: |
+            {
+              "package_name": "${{ env.package_name }}",
+              "package_version": "${{ env.package_version }}"
+            }

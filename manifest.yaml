@@ -1,0 +1,219 @@
+packages:
+  xmlrpc-c-advanced:
+    version: 1.64.0
+    checksum_sha256: 48be53a10697d28cb8f712759b2ffbc9f76832d5b94b7f84dd57f575e9714fef
+    category: xmlrpc-c
+    build_date: '2024-10-28'
+    distribution:
+    - bookworm
+  xmlrpc-c-super_stable:
+    version: 1.59.4
+    checksum_sha256: 69769c9c17d44fe4e2f902accddee3346a28aa54a67a6cc1d319d33b63d05403
+    category: xmlrpc-c
+    build_date: '2024-10-28'
+    distribution:
+    - bookworm
+  xmlrpc-c-stable:
+    version: 1.60.4
+    checksum_sha256: 4ec7fd3cd35b426b834a46951ec7344906026ef55bf1fbef52b2d714dbafbf59
+    category: xmlrpc-c
+    build_date: '2024-10-28'
+    distribution:
+    - bookworm
+  mktorrent:
+    version: 1.2.0-1build1
+    checksum_sha256: ed5e651e4884cd3126282e8978d9b359be639e2711d466fe589d084808fe5be0
+    category: mktorrent
+    build_date: '2024-11-02'
+    distribution:
+    - bookworm
+  libudns:
+    version: 0.4.1-1build1
+    checksum_sha256: c1a0a3d1d256259e7070858a1ee9cdd4df17d8b95771491de4fee67eb29ff690
+    category: libudns
+    build_date: '2024-11-02'
+    distribution:
+    - bookworm
+  deluge203:
+    version: 2.0.3-4build1
+    checksum_sha256: 2eb8d5a4af51032c846081594de40507
+    category: deluge
+    build_date: '2024-05-10'
+    distribution:
+    - bookworm
+  deluge-web203:
+    version: 2.0.3-4build1
+    checksum_sha256: 2eb8d5a4af51032c846081594de40507
+    category: deluge
+    build_date: '2024-05-10'
+    distribution:
+    - bookworm
+  deluged203:
+    version: 2.0.3-4build1
+    checksum_sha256: 2eb8d5a4af51032c846081594de40507
+    category: deluge
+    build_date: '2024-05-10'
+    distribution:
+    - bookworm
+  deluge211:
+    version: 2.1.1-1build1
+    checksum_sha256: fb9177f44b79623642ab590a9659d805
+    category: deluge
+    build_date: '2024-05-10'
+    distribution:
+    - bookworm
+  deluge-web211:
+    version: 2.1.1-1build1
+    checksum_sha256: fb9177f44b79623642ab590a9659d805
+    category: deluge
+    build_date: '2024-05-10'
+    distribution:
+    - bookworm
+  deluged211:
+    version: 2.1.1-1build1
+    checksum_sha256: fb9177f44b79623642ab590a9659d805
+    category: deluge
+    build_date: '2024-05-10'
+    distribution:
+    - bookworm
+  rtorrent:
+    version: 0.9.8-1build2
+    checksum_sha256: 1dfb9b618a2d672fced244c01bc3959d7a3c043a0042fda7d0f2313ba3d7bb0d
+    category: libtorrent
+    build_date: '2024-11-25'
+    distribution:
+    - bookworm
+  rtorrent-nightly:
+    version: 0.10.0-1build2
+    checksum_sha256: bc78a52feadb725c482f0e4abe351e0ebc977267904ce8c056044b256a7ea19c
+    category: libtorrent
+    build_date: '2024-11-25'
+    distribution:
+    - bookworm
+  transmission-cli:
+    version: 4.0.6-1build1
+    checksum_sha256: 2d7052132d1cc9175e89a453c69a5b6409757e4c37c0c4d9d2644d017b688d3b
+    category: transmission
+    build_date: '2024-11-25'
+    distribution:
+    - bookworm
+  transmission-cli-nightly:
+    version: 4.1.0-1build1
+    checksum_sha256: 0620b2b145562222cc5081d92adb91bf613a4c3acda2d0fe183d30e5ee0b393a
+    category: transmission
+    build_date: '2024-11-25'
+    distribution:
+    - bookworm
+  transmission-common:
+    version: 4.0.6-1build1
+    checksum_sha256: 3e5c98ed0c8eae1504fab4c0c132ffd71f278418a0ca278921092e0c7edd25f2
+    category: transmission
+    build_date: '2024-11-25'
+    distribution:
+    - bookworm
+  transmission-common-nightly:
+    version: 4.1.0-1build1
+    checksum_sha256: c4970164c5451cbd413012b53ac6bb576148f03f714ceb32b251bfb1782629ac
+    category: transmission
+    build_date: '2024-11-25'
+    distribution:
+    - bookworm
+  qbittorrent-nox-nightly:
+    version: 5.1.0-1build1
+    checksum_sha256: 9a8bbb76b65fac956698c8c9f86c8f94ba4396131291a55509081bb2bf2e415b
+    category: qbittorrent
+    build_date: '2024-11-13'
+    distribution:
+    - bookworm
+  qbittorrent-nox:
+    version: 5.0.1-1build1
+    checksum_sha256: 3dfa5c28990f5d5a24ea2d58139739439a39ace89eee109071eb14f456ed68a6
+    category: qbittorrent
+    build_date: '2024-11-13'
+    distribution:
+    - bookworm
+  libtorrent-rasterbar2.0t64:
+    version: 2.0.10-1.1build2
+    checksum_sha256: 64719ecc6a076b34a335b66b5576884f78e8608e4d9c12f68d5453f175293b69
+    category: libtorrent-rasterbar
+    build_date: '2024-11-22'
+    distribution:
+    - bookworm
+  libtorrent-rasterbar-dev:
+    version: 2.0.10-1.1build2
+    checksum_sha256: 69d73f59bc2947fb4ff0d4ce9c008e5ffe125f2dfdbe2d83b5fa1cc24c353975
+    category: libtorrent-rasterbar
+    build_date: '2024-11-22'
+    distribution:
+    - bookworm
+  libtorrent21t64:
+    version: 0.13.8-1build3
+    checksum_sha256: 9ba8cda6166307c9eb395dcfaea4ff918c914050bcaa9ab717671b81c71b9b43
+    category: libtorrent
+    build_date: '2024-11-21'
+    distribution:
+    - bookworm
+  libtorrent22-nightly:
+    version: 0.14.0-1build3
+    checksum_sha256: 63db09c9583df64082472fb58811ce554b5252490db2ada3f4c7e8170520a5a2
+    category: libtorrent
+    build_date: '2024-11-21'
+    distribution:
+    - bookworm
+  libtorrent-dev:
+    version: 0.13.8-1build3
+    checksum_sha256: 1c36937b29a5b75bb95398d3fc0fff016da49efc97560ed7b92c560ce823148f
+    category: libtorrent
+    build_date: '2024-11-21'
+    distribution:
+    - bookworm
+  libtorrent-dev-nightly:
+    version: 0.14.0-1build3
+    checksum_sha256: 9ea38e0ac364a02267a1b7b8cf7d045f77f072bcbd00fcb062fd3d24d0b5bb49
+    category: libtorrent
+    build_date: '2024-11-21'
+    distribution:
+    - bookworm
+  python3-libtorrent:
+    version: 2.0.10-1.1build2
+    checksum_sha256: b0beb9481227aa09ece3b5efdcb6ee8e197a2875b5a5b6217471f3dc96f19f0a
+    category: libtorrent-rasterbar
+    build_date: '2024-11-22'
+    distribution:
+    - bookworm
+applications:
+  bookworm: null
+  rtorrent:
+    dependencies:
+    - mktorrent
+    - libudns
+    - xmlrpc-c-stable
+    - libtorrent21
+    - rtorrent
+  rtorrent-nightly:
+    dependencies:
+    - mktorrent
+    - libudns
+    - xmlrpc-c-advanced
+    - libtorrent21-nightly
+    - rtorrent-nightly
+  transmission:
+    dependencies:
+    - libtorrent-rasterbar2.0t64
+    - transmission-common
+    - transmission-cli
+  transmission-nightly:
+    dependencies:
+    - libtorrent-rasterbar2.0t64
+    - transmission-common-nightly
+    - transmission-cli-nightly
+  qbittorrent:
+    dependencies:
+    - libtorrent-rasterbar2.0t64
+    - python3-libtorrent
+    - qbittorrent-nox
+  qbittorrent-nightly:
+    dependencies:
+    - libtorrent-rasterbar2.0t64
+    - python3-libtorrent
+    - qbittorrent-nox-nightly

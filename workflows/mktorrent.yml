@@ -1,0 +1,200 @@
+name: Compile mktorrent
+
+permissions: write-all
+
+on:
+  schedule:
+    - cron: "0 2 * * 0"
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/mktorrent.yml'
+
+jobs:
+  mktorrent:
+    runs-on: ubuntu-24.04
+
+    env:
+      REPO_PATH: "${{ github.workspace }}/binaries"
+      CURRENT_MKTORRENT_PATH: "${{ github.workspace }}/binaries/dist/current/mktorrent"
+      ARCHIVE_MKTORRENT_PATH: "${{ github.workspace }}/binaries/dist/archive/mktorrent"
+      POOL_PATH: "${{ github.workspace }}/binaries/dist/pool"
+      SCRIPTS_PATH: "${{ github.workspace }}/binaries/scripts"
+      TIME_DIFF: 48000
+
+    steps:
+      - uses: tecolicom/actions-use-apt-tools@v1
+        with:
+          tools: build-essential autoconf automake libtool curl git pkg-config unzip zlib1g-dev cmake libssl-dev jq ninja-build
+          cache: false 
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: ${{ env.REPO_PATH }}
+
+      - name: Determine mktorrent Version and Updates
+        id: mktorrent_update
+        env:
+          time_diff: ${{ env.TIME_DIFF }}
+        run: |
+          set -e
+          REPO="MediaEase/mktorrent"
+          REPO_URL="https://github.com/${REPO}"
+          REPO_API_URL="https://api.github.com/repos/${REPO}"
+          VERSION_FILE="CMakeLists.txt"
+          FILE_CONTENT=$(curl -sL "$REPO_URL/raw/main/$VERSION_FILE")
+          MKTORRENT_VERSION=$(echo "$FILE_CONTENT" | grep -oP 'VERSION\s+\K[0-9]+\.[0-9]+\.[0-9]+')
+          PACKAGE_NAME="mktorrent"
+          ARCHITECTURE="amd64"
+          CURRENT_DATE=$(date +%Y-%m-%d)
+          BUILD_NUMBER=$(bash ${{ env.SCRIPTS_PATH }}/increment_revision.sh "$PACKAGE_NAME" "$MKTORRENT_VERSION" "${{ env.CURRENT_MKTORRENT_PATH }}")
+          FULL_VERSION="${MKTORRENT_VERSION}-1${BUILD_NUMBER}"
+          PACKAGE_FILE="${PACKAGE_NAME}_${FULL_VERSION}_${ARCHITECTURE}.deb"
+          COMMIT_DATE=$(curl -s "$REPO_API_URL/branches/main" | jq -r '.commit.commit.committer.date')
+          COMMIT_TIMESTAMP=$(date -d "$COMMIT_DATE" +%s)
+          CURRENT_TIMESTAMP=$(date +%s)
+          TIMESTAMP_DIFF=$(( (CURRENT_TIMESTAMP - COMMIT_TIMESTAMP) / 3600 ))
+          echo "Latest commit was $TIMESTAMP_DIFF hours ago."
+          if (( TIMESTAMP_DIFF <= ${time_diff} )); then
+            UPDATE_NEEDED=true
+            echo "Repository has updates within the last ${time_diff} hours."
+          else
+            if [ ! -f "${{ env.CURRENT_MKTORRENT_PATH }}/${PACKAGE_FILE}" ]; then
+              echo "Package ${PACKAGE_FILE} does not exist. Update needed."
+              UPDATE_NEEDED=true
+            else
+              echo "Package ${PACKAGE_FILE} already exists. No update needed."
+              UPDATE_NEEDED=false
+            fi
+          fi
+          TMP_DIR=$(mktemp -d)
+          TMP_DIR=${TMP_DIR##*tmp.}
+          TMP_DIR="${{ env.REPO_PATH }}/$TMP_DIR"
+          mkdir -p $TMP_DIR
+          INSTALL_DIR=$(mktemp -d)
+          INSTALL_DIR=${INSTALL_DIR##*tmp.}
+          INSTALL_DIR="${{ env.REPO_PATH }}/install"
+          COMMIT_MESSAGE="Update ${PACKAGE_NAME} to v${MKTORRENT_VERSION}"
+          variables=(UPDATE_NEEDED TMP_DIR INSTALL_DIR PACKAGE_FILE PACKAGE_NAME FULL_VERSION MKTORRENT_VERSION COMMIT_MESSAGE CURRENT_DATE COMMIT_DATE ARCHITECTURE BUILD_NUMBER TIMESTAMP_DIFF)
+          variables_sorted=($(printf "%s\n" "${variables[@]}" | sort))
+          for variable in "${variables_sorted[@]}"; do
+            lower_variable=$(echo "$variable" | tr '[:upper:]' '[:lower:]')
+            upper_variable=$(echo "$variable" | tr '[:lower:]' '[:upper:]')
+            value="${!upper_variable}"
+            echo "${upper_variable} : ${value}"
+            echo "${lower_variable}=${value}" >> $GITHUB_OUTPUT
+          done
+
+      - name: Download official mktorrent package
+        id: mktorrent_download
+        if: steps.mktorrent_update.outputs.update_needed == 'true'
+        env:
+          tmp_dir: ${{ steps.mktorrent_update.outputs.tmp_dir }}
+        run: |
+          cd ${tmp_dir}
+          sudo apt-get update
+          apt-get download mktorrent
+
+      - name: Checkout mktorrent Source Code
+        if: steps.mktorrent_update.outputs.UPDATE_NEEDED == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: MediaEase/mktorrent
+          ref: main
+          fetch-depth: 0
+          path: ${{ github.workspace }}/mktorrent
+
+      - name: Compile mktorrent
+        if: steps.mktorrent_update.outputs.UPDATE_NEEDED == 'true'
+        env:
+          install_dir: ${{ steps.mktorrent_update.outputs.INSTALL_DIR }}
+        run: |
+          set -e
+          cd ${{ github.workspace }}/mktorrent
+          cmake_args=(
+            -B build
+            -G "Ninja"
+            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_INSTALL_PREFIX="${install_dir}"
+            -DMKTORRENT_LONG_OPTIONS=ON
+            -DMKTORRENT_PTHREADS=ON
+            -DMKTORRENT_OPENSSL=ON
+            -DMKTORRENT_USE_GITREV_VERSION=ON
+          )
+          cmake "${cmake_args[@]}"
+          cmake --build build --parallel $(nproc)
+          cmake --install build --prefix="${install_dir}"
+
+      - name: Generate Deb Files and Capture Checksums
+        id: generate_deb_files
+        if: steps.mktorrent_update.outputs.UPDATE_NEEDED == 'true'
+        env:
+          package_name: ${{ steps.mktorrent_update.outputs.PACKAGE_NAME }}
+          full_version: ${{ steps.mktorrent_update.outputs.FULL_VERSION }}
+          install_dir: ${{ steps.mktorrent_update.outputs.INSTALL_DIR }}
+          current_date: ${{ steps.mktorrent_update.outputs.CURRENT_DATE }}
+          pool_path: ${{ env.POOL_PATH }}
+          scripts_path: ${{ env.SCRIPTS_PATH }}
+          tmp_dir: ${{ steps.mktorrent_update.outputs.TMP_DIR }}
+        run: |
+          set -e
+          mkdir -p "${pool_path}"
+          bash "${scripts_path}/generate_control.sh" \
+            "${package_name}" \
+            "${install_dir}" \
+            "${tmp_dir}" \
+            "${full_version}" \
+            "${current_date}" \
+            "${pool_path}"
+
+          PACKAGE_FILE="${pool_path}/${package_name}_${full_version}_amd64.deb"
+          CHECKSUM=$(sha256sum "$PACKAGE_FILE" | awk '{ print $1 }')
+          echo "checksum=${CHECKSUM}" >> $GITHUB_OUTPUT
+          echo "package_file=${PACKAGE_FILE}" >> $GITHUB_OUTPUT
+          echo "mktorrent_packaged=true" >> $GITHUB_OUTPUT
+
+      - name: Archive and Upload mktorrent Package
+        if: steps.generate_deb_files.outputs.mktorrent_packaged == 'true'
+        env:
+          package_file: ${{ steps.generate_deb_files.outputs.package_file }}
+          current_mktorrent_path: ${{ env.CURRENT_MKTORRENT_PATH }}
+          archive_mktorrent_path: ${{ env.ARCHIVE_MKTORRENT_PATH }}
+          scripts_path: ${{ env.SCRIPTS_PATH }}
+        run: |
+          bash "${scripts_path}/archive_packages.sh" \
+            "${current_mktorrent_path}" \
+            "${archive_mktorrent_path}" \
+            "${package_file}"
+
+      - name: Commit and Push mktorrent Package
+        if: steps.generate_deb_files.outputs.mktorrent_packaged == 'true'
+        uses: EndBug/add-and-commit@v9
+        with:
+          author_name: "tomcdj71"
+          author_email: "contact.tomc@yahoo.fr"
+          message: ${{ steps.mktorrent_update.outputs.commit_message }}
+          cwd: "./binaries"
+          add: |
+            dist/current/mktorrent/
+            dist/archive/mktorrent/
+          push: true
+
+      - name: Trigger Update Manifest Workflow
+        if: steps.generate_deb_files.outputs.mktorrent_packaged == 'true'
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          event-type: update-manifest
+          client-payload: |
+            {
+              "package_updates": {
+                "${{ steps.generate_deb_files.outputs.package_name }}": {
+                  "checksum": "${{ steps.generate_deb_files.outputs.checksum }}",
+                  "version": "${{ steps.mktorrent_update.outputs.FULL_VERSION }}",
+                  "category": "mktorrent",
+                  "build_date": "${{ steps.mktorrent_update.outputs.CURRENT_DATE }}"
+                }
+              }
+            }
