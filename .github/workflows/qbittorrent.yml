@@ -39,7 +39,7 @@ jobs:
           LIBTORRENT_VERSION_MAJOR="${{ matrix.libtorrent_version }}"
           QBITTORRENT_REPO="${{ env.QBITTORRENT_REPO }}"
           REPO_URL="https://github.com/${QBITTORRENT_REPO}.git"
-          BRANCHES_JSON=$(curl -s "https://api.github.com/repos/${QBITTORRENT_REPO}/git/refs/heads?per_page=100")
+          BRANCHES_JSON=$(curl -s "https://api.github.com/repos/${QBITTORRENT_REPO}/tags?per_page=100")
           RELEASE_BRANCHES=$(echo "$BRANCHES_JSON" | jq -r '.[].ref' | grep 'refs/heads/release-' | sed 's|refs/heads/||')
           if [ -z "$RELEASE_BRANCHES" ]; then
             echo "No release branches found."
