@@ -141,6 +141,7 @@ jobs:
             echo "${upper_variable} : ${value}"
             echo "${lower_variable}=${value}" >> $GITHUB_OUTPUT
           done
+          cat $GITHUB_OUTPUT
           echo "PACKAGE_NAME=${PACKAGE_NAME}" >> $GITHUB_ENV
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
       
