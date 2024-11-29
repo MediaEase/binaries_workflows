@@ -188,7 +188,7 @@ jobs:
           artifacts_dir="${{ github.workspace }}/artifacts"
           cd ${tmp_dir}
           mkdir -p "${output_dir}" "${artifacts_dir}"
-          new_bin=$(find "${repo_path}" -name "*-${package_name}*" -type f)
+          new_bin=$(find "${repo_path}" -name "${{ env.ASSET_FILE }}" -type f)
           cp "${new_bin}" "${install_dir}/" || echo "Failed to copy ${new_bin} to ${install_dir}/"
           apt-get download ${package_name}
           cd -
