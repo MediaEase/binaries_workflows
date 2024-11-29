@@ -126,10 +126,10 @@ packages:
     distribution:
     - bookworm
   qbittorrent-nox:
-    version: 5.0.1-1build1
-    checksum_sha256: 3dfa5c28990f5d5a24ea2d58139739439a39ace89eee109071eb14f456ed68a6
+    version: 5.0.2-1build1
+    checksum_sha256: b155a7e2f5aba15f795d76f60badfdbc4aafb094de66d192df2f4ba6ec8e575f
     category: qbittorrent
-    build_date: '2024-11-13'
+    build_date: '2024-11-28'
     distribution:
     - bookworm
   libtorrent-rasterbar2.0t64:

@@ -60,7 +60,7 @@ if [[ "$PACKAGE_NAME" == "libtorrent22" || ("$PACKAGE_NAME" == "libtorrent-dev" 
   PACKAGE_FILE="$TMPDIR/$(basename "$PACKAGE_FILE")"
 else
   PACKAGE_NAME="${PACKAGE_NAME//-nightly/}"
-  PACKAGE_FILE=$(find "$TMPDIR" -type f -name "${PACKAGE_NAME}*.deb" -print -quit)
+  PACKAGE_FILE=$(find "$TMPDIR" -type f -name "*${PACKAGE_NAME}*.deb" -print -quit)
   if [ -z "$PACKAGE_FILE" ]; then
     echo "Error: Package file for $PACKAGE_NAME not found in $TMPDIR"
     echo "Contents of TMPDIR:"
@@ -144,20 +144,14 @@ if [ "$NO_CHECK" = false ]; then
   old_installed_size=$(grep "^Installed-Size:" "$control_file" | awk '{print $2}')
   echo "Performing rsync to merge installation files..."
   echo "content of $INSTALL_DIR:"
+  tree -L 3 "$INSTALL_DIR"
   rsync -auv --existing "$INSTALL_DIR/" "./"
-  if [ "$PACKAGE_NAME" == "libtorrent22" ] && [ ! -f usr/lib/x86_64-linux-gnu/libtorrent.so ]; then
-    ln -s usr/lib/x86_64-linux-gnu/libtorrent.so.22.0.0 usr/lib/x86_64-linux-gnu/libtorrent.so
-  fi
-  if [ "$PACKAGE_NAME" == "qbittorrent-nox" ]; then
-    new_qbittorrent_nox=$(find "$INSTALL_DIR" -type f -name "qbittorrent-nox")
-    if [ -n "$new_qbittorrent_nox" ]; then
-      echo "Replacing qbittorrent-nox binary"
-      rm -f usr/bin/qbittorrent-nox
-      cp "$new_qbittorrent_nox" usr/bin/
-    else
-      echo "Error: qbittorrent-nox binary not found in $INSTALL_DIR"
-      exit 1
-    fi
+  if [[ "$PACKAGE_NAME" == *qbittorrent-nox* ]]; then
+    new_qbittorrent_nox=$(find "$INSTALL_DIR" -type f)
+    echo "Found new qbittorrent-nox binary: $new_qbittorrent_nox"
+    echo "Replacing qbittorrent-nox binary"
+    rm -f "$PACKAGE_DIR/usr/bin/qbittorrent-nox"
+    mv "$new_qbittorrent_nox" "$PACKAGE_DIR/usr/bin/qbittorrent-nox"
   fi
   installed_size=$(du -sk . | cut -f1)
   echo "Old Installed-Size: $old_installed_size kB"
