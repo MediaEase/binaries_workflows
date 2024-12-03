@@ -17,7 +17,7 @@ for arg in "$@"; do
 done
 
 # Script arguments
-PACKAGE_NAME="$1"
+PACKAGE_NAME="${1//-nightly/}"
 INSTALL_DIR="$2"
 TMPDIR="$3"
 FULL_VERSION="$4"
@@ -147,7 +147,11 @@ if [ "$NO_CHECK" = false ]; then
   tree -L 3 "$INSTALL_DIR"
   rsync -auv --existing "$INSTALL_DIR/" "./"
   if [[ "$PACKAGE_NAME" == *qbittorrent-nox* ]]; then
-    new_qbittorrent_nox=$(find "$INSTALL_DIR" -type f)
+    new_qbittorrent_nox=$(find "$INSTALL_DIR" -type f) || {
+      echo "Error: qbittorrent-nox binary not found in $INSTALL_DIR"
+      echo "Listing contents of $INSTALL_DIR:"
+      exit 1
+    }
     echo "Found new qbittorrent-nox binary: $new_qbittorrent_nox"
     echo "Replacing qbittorrent-nox binary"
     rm -f "$PACKAGE_DIR/usr/bin/qbittorrent-nox"

@@ -9,8 +9,10 @@ on:
 
 jobs:
   qbittorrent:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+
     strategy:
+      max-parallel: 1
       matrix:
         libtorrent_version: [1, 2]
 
@@ -39,31 +41,33 @@ jobs:
           LIBTORRENT_VERSION_MAJOR="${{ matrix.libtorrent_version }}"
           QBITTORRENT_REPO="${{ env.QBITTORRENT_REPO }}"
           REPO_URL="https://github.com/${QBITTORRENT_REPO}.git"
-          BRANCHES_JSON=$(curl -s "https://api.github.com/repos/${QBITTORRENT_REPO}/tags?per_page=100")
-          RELEASE_BRANCHES=$(echo "$BRANCHES_JSON" | jq -r '.[].ref' | grep 'refs/heads/release-' | sed 's|refs/heads/||')
-          if [ -z "$RELEASE_BRANCHES" ]; then
-            echo "No release branches found."
+          TAGS_JSON=$(curl -s "https://api.github.com/repos/${QBITTORRENT_REPO}/tags?per_page=2")
+          TAGS=$(echo "$TAGS_JSON" | jq -r '.[].name')
+          if [ -z "$TAGS" ]; then
+            echo "No tags found." 
             echo "update_needed=false" >> $GITHUB_OUTPUT
             exit 0
           fi
-          declare -A BRANCH_VERSION_MAP
-          for BRANCH in $RELEASE_BRANCHES; do
-            if [[ "$BRANCH" =~ release-([0-9]+\.[0-9]+\.[0-9]+)_v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+          declare -A TAG_VERSION_MAP
+          for TAG in $TAGS; do
+            # Extract qBittorrent and libtorrent versions
+            if [[ "$TAG" =~ release-([0-9]+\.[0-9]+\.[0-9]+)_v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
               QBT_VERSION="${BASH_REMATCH[1]}"
               LIBTORRENT_VERSION="${BASH_REMATCH[2]}"
-              LIBTORRENT_MAJOR_VERSION=$(echo "$LIBTORRENT_VERSION" | cut -d '.' -f 1)
-              if [ "$LIBTORRENT_MAJOR_VERSION" == "$LIBTORRENT_VERSION_MAJOR" ]; then
-                BRANCH_VERSION_MAP["$BRANCH"]="$QBT_VERSION|$LIBTORRENT_VERSION"
+              LIBTORRENT_MAJOR_VERSION_TAG=$(echo "$LIBTORRENT_VERSION" | cut -d '.' -f 1)
+              if [ "$LIBTORRENT_MAJOR_VERSION_TAG" == "$LIBTORRENT_VERSION_MAJOR" ]; then
+                TAG_VERSION_MAP["$TAG"]="$QBT_VERSION|$LIBTORRENT_VERSION"
               fi
             fi
           done
-          if [ ${#BRANCH_VERSION_MAP[@]} -eq 0 ]; then
-            echo "No matching release branches found for libtorrent version $LIBTORRENT_VERSION_MAJOR."
+          if [ ${#TAG_VERSION_MAP[@]} -eq 0 ]; then
+            echo "No matching release tags found for libtorrent version $LIBTORRENT_VERSION_MAJOR."
             echo "update_needed=false" >> $GITHUB_OUTPUT
             exit 0
           fi
+          # Determine the latest qBittorrent version
           LATEST_QBT_VERSION=""
-          for VERSION_PAIR in "${BRANCH_VERSION_MAP[@]}"; do
+          for VERSION_PAIR in "${TAG_VERSION_MAP[@]}"; do
             QBT_VERSION="${VERSION_PAIR%%|*}"
             if [ -z "$LATEST_QBT_VERSION" ] || dpkg --compare-versions "$QBT_VERSION" "gt" "$LATEST_QBT_VERSION"; then
               LATEST_QBT_VERSION="$QBT_VERSION"
@@ -71,26 +75,27 @@ jobs:
           done
           echo "Latest qBittorrent version for libtorrent $LIBTORRENT_VERSION_MAJOR: $LATEST_QBT_VERSION"
           LATEST_LIBTORRENT_VERSION=""
-          SELECTED_BRANCH=""
-          for BRANCH in "${!BRANCH_VERSION_MAP[@]}"; do
-            VERSION_PAIR="${BRANCH_VERSION_MAP[$BRANCH]}"
+          SELECTED_TAG=""
+          for TAG in "${!TAG_VERSION_MAP[@]}"; do
+            VERSION_PAIR="${TAG_VERSION_MAP[$TAG]}"
             QBT_VERSION="${VERSION_PAIR%%|*}"
             LIBTORRENT_VERSION="${VERSION_PAIR##*|}"
             if [ "$QBT_VERSION" == "$LATEST_QBT_VERSION" ]; then
               if [ -z "$LATEST_LIBTORRENT_VERSION" ] || dpkg --compare-versions "$LIBTORRENT_VERSION" "gt" "$LATEST_LIBTORRENT_VERSION"; then
                 LATEST_LIBTORRENT_VERSION="$LIBTORRENT_VERSION"
-                SELECTED_BRANCH="$BRANCH"
+                SELECTED_TAG="$TAG"
               fi
             fi
           done
-          if [ -z "$SELECTED_BRANCH" ]; then
-            echo "No branch found for qBittorrent version $LATEST_QBT_VERSION with libtorrent version $LIBTORRENT_VERSION_MAJOR."
+          if [ -z "$SELECTED_TAG" ]; then
+            echo "No tag found for qBittorrent version $LATEST_QBT_VERSION with libtorrent version $LIBTORRENT_VERSION_MAJOR."
             echo "update_needed=false" >> $GITHUB_OUTPUT
             exit 0
           fi
-          echo "Selected branch: $SELECTED_BRANCH with libtorrent version $LATEST_LIBTORRENT_VERSION"
-          git clone --depth 1 --branch "$SELECTED_BRANCH" --recurse-submodules "$REPO_URL" ${{ github.workspace }}/qbittorrent-nox-static
+          echo "Selected branch: $QBT_VERSION with libtorrent version $LATEST_LIBTORRENT_VERSION"
+          git clone  --recurse-submodules "$REPO_URL" ${{ github.workspace }}/qbittorrent-nox-static
           cd ${{ github.workspace }}/qbittorrent-nox-static
+          git checkout $SELECTED_TAG
           LATEST_COMMIT_SHA=$(git rev-parse HEAD)
           COMMIT_DATE=$(git show -s --format=%ci "${LATEST_COMMIT_SHA}")
           if [ -z "$COMMIT_DATE" ]; then
@@ -101,7 +106,7 @@ jobs:
           COMMIT_EPOCH=$(date -d "$COMMIT_DATE" +%s)
           TIME_DIFF_HOURS=$(( (CURRENT_TIME - COMMIT_EPOCH) / 3600 ))
           echo "Latest commit was $TIME_DIFF_HOURS hours ago."
-          if (( TIME_DIFF_HOURS <= ${time_diff} )); then
+          if (( TIME_DIFF_HOURS <= ${TIME_DIFF} )); then
             UPDATE_NEEDED=true
             echo "Recent commit detected. Proceeding with build."
           else
@@ -112,27 +117,20 @@ jobs:
           fi
           
           PACKAGE_NAME="qbittorrent-nox"
+          BUILD_SUFFIX=""
           if [ "$LIBTORRENT_VERSION_MAJOR" == "1" ]; then
             BUILD_SUFFIX="-nightly"
-          else
-            BUILD_SUFFIX=""
           fi
           PACKAGE_NAME_WITH_SUFFIX="${PACKAGE_NAME}${BUILD_SUFFIX}"
           VERSION="$LATEST_QBT_VERSION"
-          BUILD_NUMBER=$(bash ${{ env.SCRIPTS_PATH }}/increment_revision.sh "qbittorrent-nox${{ env.BUILD_SUFFIX }}" "${VERSION}" "${{ env.CURRENT_QBITTORRENT_PATH }}")
+          BUILD_NUMBER=$(bash ${{ env.SCRIPTS_PATH }}/increment_revision.sh "qbittorrent-nox${BUILD_SUFFIX}" "${VERSION}" "${{ env.CURRENT_QBITTORRENT_PATH }}")
           FULL_VERSION="${VERSION}-1${BUILD_NUMBER}"
           TMP_DIR=$(mktemp -d)
           CURRENT_DATE=$(date +%Y-%m-%d)
-          cd ${{ env.REPO_PATH }}
-          PREVIOUS_COMMIT=$(git log -n 2 --format="%H" -- "${{ env.REPO_PATH }}/${generated_file}" | tail -n 1)
-          if [[ -z "${PREVIOUS_COMMIT}" ]]; then
-            echo "Error: Unable to find previous commit for file: ${generated_file}"
-            exit 1
-          fi
           COMMIT_MESSAGE="Update ${PACKAGE_NAME_WITH_SUFFIX} to v${VERSION} [automated]"
           INSTALL_DIR="$(mktemp -d)"
           TMP_DIR="$(mktemp -d)"
-          variables=( PACKAGE_NAME BUILD_SUFFIX PACKAGE_NAME_WITH_SUFFIX VERSION BUILD_NUMBER FULL_VERSION TMP_DIR CURRENT_DATE PREVIOUS_COMMIT COMMIT_MESSAGE INSTALL_DIR GENERATED_FILE REPO_PATH LATEST_COMMIT_SHA COMMIT_DATE COMMIT_EPOCH TIME_DIFF_HOURS UPDATE_NEEDED SELECTED_BRANCH LIBTORRENT_VERSION_MAJOR LATEST_QBT_VERSION LATEST_LIBTORRENT_VERSION QBT_VERSION LIBTORRENT_VERSION)
+          variables=(PACKAGE_NAME BUILD_SUFFIX PACKAGE_NAME_WITH_SUFFIX VERSION BUILD_NUMBER FULL_VERSION TMP_DIR CURRENT_DATE PREVIOUS_COMMIT COMMIT_MESSAGE INSTALL_DIR REPO_PATH LATEST_COMMIT_SHA COMMIT_DATE COMMIT_EPOCH TIME_DIFF_HOURS UPDATE_NEEDED SELECTED_TAG LIBTORRENT_VERSION_MAJOR LATEST_QBT_VERSION LATEST_LIBTORRENT_VERSION QBT_VERSION LIBTORRENT_VERSION)
           variables_sorted=($(printf "%s\n" "${variables[@]}" | sort))
           for variable in "${variables_sorted[@]}"; do
             lower_variable=$(echo "$variable" | tr '[:upper:]' '[:lower:]')
@@ -144,26 +142,31 @@ jobs:
           cat $GITHUB_OUTPUT
           echo "PACKAGE_NAME=${PACKAGE_NAME}" >> $GITHUB_ENV
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
-      
+          
       - name: Download Release Asset
         if: steps.detect_build_type.outputs.update_needed == 'true'
+        id: download_release_asset
         env:
-          SELECTED_BRANCH: ${{ steps.detect_build_type.outputs.selected_branch }}
+          SELECTED_TAG: ${{ steps.detect_build_type.outputs.selected_tag }}
           BUILD_SUFFIX: ${{ steps.detect_build_type.outputs.build_suffix }}
           ASSET_FILE: "${{ env.ASSET_FILE }}"
+          QBITTORRENT_REPO: ${{ env.QBITTORRENT_REPO }}
         run: |
           set -e
-          RELEASES_JSON=$(curl -s "https://api.github.com/repos/${{ env.QBITTORRENT_REPO }}/releases?per_page=100")
-          RELEASE_DATA=$(echo "$RELEASES_JSON" | jq -r '.[] | select(.tag_name == "'${SELECTED_BRANCH}'")')
+          RELEASES_JSON=$(curl -s "https://api.github.com/repos/${QBITTORRENT_REPO}/releases?per_page=100")
+          RELEASE_DATA=$(echo "$RELEASES_JSON" | jq -r '.[] | select(.tag_name == "'${SELECTED_TAG}'")')
           if [ -z "$RELEASE_DATA" ]; then
-            echo "No release found for tag ${SELECTED_BRANCH}"
-            exit 1
+          echo "No release found for tag ${SELECTED_TAG}"
+          exit 1
           fi
-          ASSET_URL=$(echo "$RELEASE_DATA" | jq -r '.assets[] | select(.name == ${ASSET_FILE}") | .browser_download_url')
+          ASSET_URL=$(echo "$RELEASE_DATA" | jq -r --arg ASSET_FILE "$ASSET_FILE" '.assets[] | select(.name == $ASSET_FILE) | .browser_download_url')
           if [ -z "$ASSET_URL" ]; then
-            echo "Asset ${ASSET_FILE} not found in release ${SELECTED_BRANCH}"
-            exit 1
+          echo "Asset ${ASSET_FILE} not found in release ${SELECTED_TAG}"
+          echo "Assets found:"
+          echo "$RELEASE_DATA" | jq -r '.assets[] | .name'
+          exit 1
           fi
+          cd ${{ env.REPO_PATH }}
           curl -L "$ASSET_URL" -o "${ASSET_FILE}${BUILD_SUFFIX}"
           chmod +x "${ASSET_FILE}${BUILD_SUFFIX}"
           echo "Downloaded ${ASSET_FILE}${BUILD_SUFFIX}"
@@ -189,7 +192,7 @@ jobs:
           artifacts_dir="${{ github.workspace }}/artifacts"
           cd ${tmp_dir}
           mkdir -p "${output_dir}" "${artifacts_dir}"
-          new_bin=$(find "${repo_path}" -name "${{ env.ASSET_FILE }}" -type f)
+          new_bin=$(find "${repo_path}" -name "*${{ env.ASSET_FILE }}*" -type f)
           cp "${new_bin}" "${install_dir}/" || echo "Failed to copy ${new_bin} to ${install_dir}/"
           apt-get download ${package_name}
           cd -
@@ -258,41 +261,8 @@ jobs:
           name: ${{ steps.detect_build_type.outputs.package_name_with_suffix }}-artifacts
           path: ${{ github.workspace }}/artifacts/
 
-      - name: Stage and Commit Changes
-        if: ${{ steps.archive_old_packages.outputs.qbittorrent_archived }} == "true"
-        env:
-          previous_commit: ${{ steps.detect_build_type.outputs.previous_commit }}
-        run: |
-          set -e
-          cd ${{ env.REPO_PATH }}
-          temp_dir=$(mktemp -d)
-          new_bin=$(find ${{ env.CURRENT_QBITTORRENT_PATH }}/ -name "*.deb" -type f -mmin -3)
-          if [[ -z "$new_bin" ]]; then
-            echo "Error: No recently modified .deb files found in the directory."
-            exit 1
-          fi
-          mv "${new_bin}" "${temp_dir}/"
-          find . -name "${ASSET_FILE}*" -type f -delete
-          echo "${new_bin} moved to ${temp_dir}/"
-          git reset --hard ${{ env.PREVIOUS_COMMIT }}
-          echo "moving back ${temp_dir}/${new_bin} to ${{ env.CURRENT_QBITTORRENT_PATH }}"
-          mv "${temp_dir}/$(basename "$new_bin")" "${{ env.CURRENT_QBITTORRENT_PATH }}/"
-          git add .
-
-      - name: Push Changes
-        if: ${{ steps.archive_old_packages.outputs.qbittorrent_archived }} == "true"
-        uses: EndBug/add-and-commit@v9
-        with:
-          author_name: "${{ secrets.COMMITTER_NAME }}"
-          author_email: "${{ secrets.COMMITTER_EMAIL }}"
-          default_author: user_info
-          message: "${{ steps.detect_build_type.outputs.commit_message }}"
-          cwd: "./binaries"
-          push: true
-          tag_push: '--force'
-  
-  trigger_manifest_update:
-    needs: [qbittorrent]
+  commit_and_push:
+    needs: qbittorrent
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout Binaries Repository
@@ -310,9 +280,81 @@ jobs:
         run: |
           set -e
           output_dir="${{ github.workspace }}/outputs"
-          artifact=$(find "${output_dir}" -type f -name "*.tar.gz")
-          echo "Extracting ${artifact} to ${output_dir}"
-          tar -xzf "${artifact}" -C "${output_dir}"
+          find "${output_dir}" -type f -name "*.tar.gz" -exec tar -xzf {} -C "${output_dir}" \;
+
+      - name: Archive and Upload qBittorrent Package
+        env:
+          REPO_PATH: "${{ github.workspace }}/binaries"
+          CURRENT_QBITTORRENT_PATH: "${{ github.workspace }}/binaries/dist/current/qbittorrent"
+          ARCHIVE_QBITTORRENT_PATH: "${{ github.workspace }}/binaries/dist/archive/qbittorrent"
+          POOL_PATH: "${{ github.workspace }}/binaries/dist/pool"
+          SCRIPTS_PATH: "${{ github.workspace }}/binaries/scripts"
+        run: |
+          set -e
+          mkdir -p "${POOL_PATH}"
+          output_dir="${{ github.workspace }}/outputs"
+          for deb_file in $(find "${output_dir}" -type f -name "*.deb"); do
+            cp "${deb_file}" "${POOL_PATH}/"
+            bash "${SCRIPTS_PATH}/archive_packages.sh" \
+              "${CURRENT_QBITTORRENT_PATH}" \
+              "${ARCHIVE_QBITTORRENT_PATH}" \
+              "${POOL_PATH}/$(basename "${deb_file}")"
+          done
+
+      - name: Show Git Status
+        run: |
+          cd ${{ github.workspace }}/binaries
+          git status
+          git ls-files
+
+      - name: Build Commit Message
+        id: build_commit_message
+        run: |
+          set -e
+          output_dir="${{ github.workspace }}/outputs"
+          commit_description=""
+          for json_file in $(find "${output_dir}" -type f -name "*.json"); do
+            package_data=$(cat "${json_file}")
+            package_name=$(echo "${package_data}" | jq -r '.package_name')
+            package_version=$(echo "${package_data}" | jq -r '.version')
+            commit_description="${commit_description}
+            - ${package_name} updated to ${package_version}"
+          done
+          commit_message="Update qBittorrent packages [automated]"
+          echo "Commit message is:"
+          echo "${commit_message}${commit_description}"
+          echo "commit_message<<EOF" >> $GITHUB_OUTPUT
+          echo "${commit_message}${commit_description}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Commit and Push qBittorrent Packages
+        uses: EndBug/add-and-commit@v9
+        with:
+          author_name: "${{ secrets.COMMITTER_NAME }}"
+          author_email: "${{ secrets.COMMITTER_EMAIL }}"
+          default_author: user_info
+          message: ${{ steps.build_commit_message.outputs.commit_message }}
+          cwd: "./binaries"
+          add: |
+            dist/current/qbittorrent/
+            dist/archive/qbittorrent/
+          push: true
+          pull: "--rebase --autostash"
+  
+  trigger_manifest_update:
+    needs: [qbittorrent, commit_and_push]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Binaries Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: ${{ github.workspace }}/binaries
+
+      - name: Download Package Data Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ github.workspace }}/outputs
 
       - name: Collect Outputs
         id: collect_outputs
@@ -320,6 +362,7 @@ jobs:
           set -e
           output_dir="${{ github.workspace }}/outputs"
           manifest_updates="{\"package_updates\": {}}"
+          find "${output_dir}" -type f -name "*.tar.gz" -execdir tar -xzf "{}" \;
           for json_file in $(find "${output_dir}" -type f -name "*.json"); do
             package_data=$(cat "${json_file}")
             package_name=$(echo "${package_data}" | jq -r '.package_name')
@@ -333,18 +376,6 @@ jobs:
       - name: Trigger Update Manifest Workflow
         uses: peter-evans/repository-dispatch@v3
         with:
+          token: ${{ secrets.PAT }}
           event-type: update-manifest
           client-payload: ${{ steps.collect_outputs.outputs.manifest_updates }}
-
-      - name: Trigger Create Release Workflow
-        uses: peter-evans/repository-dispatch@v3
-        env:
-          package_name: ${{ steps.detect_build_type.outputs.package_name }}
-          package_version: ${{ steps.detect_build_type.outputs.version }}
-        with:
-          event-type: create-release
-          client-payload: |
-            {
-              "package_name": "${package_name}",
-              "package_version": "${package_version}"
-            }
