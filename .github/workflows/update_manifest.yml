@@ -1,4 +1,4 @@
-name: Update Manifest
+name: Update Manifest and Create Release
 
 permissions: write-all
 
@@ -8,8 +8,13 @@ on:
 
 jobs:
   update_manifest:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
+    outputs:
+      manifest_updated: ${{ steps.update_manifest.outputs.manifest_updated }}
+      package_names: ${{ steps.extract_package_data.outputs.package_names }}
+      package_versions: ${{ steps.extract_package_data.outputs.package_versions }}
+    
     steps:
       - name: Checkout Binaries Repository
         uses: actions/checkout@v4
@@ -31,6 +36,30 @@ jobs:
           pip install --upgrade pip
           pip install pyyaml yamllint
 
+      - name: Extract Package Data
+        id: extract_package_data
+        run: |
+          package_updates=$(echo '${{ toJson(github.event.client_payload) }}' | jq -c '.package_updates')
+          package_names=()
+          package_versions=()
+          echo "Extracting package data..."
+          for row in $(echo "${package_updates}" | jq -c 'to_entries[]'); do
+            package_name=$(echo "${row}" | jq -r '.key')
+            package_version=$(echo "${row}" | jq -r '.value.version')
+            package_names+=("$package_name")
+            package_versions+=("$package_version")
+            echo "Found package: $package_name, version: $package_version"
+          done
+          package_names_json=$(printf '%s\n' "${package_names[@]}" | jq -R . | jq -s -c .)
+          package_versions_json=$(printf '%s\n' "${package_versions[@]}" | jq -R . | jq -s -c .)
+          echo "Including all packages (nightly and regular)..."
+          echo "package_names<<EOF" >> $GITHUB_OUTPUT
+          echo "${package_names_json}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "package_versions<<EOF" >> $GITHUB_OUTPUT
+          echo "${package_versions_json}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Update manifest.yaml
         id: update_manifest
         run: |
@@ -46,9 +75,265 @@ jobs:
         if: steps.update_manifest.outputs.manifest_updated == 'true'
         uses: EndBug/add-and-commit@v9
         with:
-          author_name: "${{ env.author_name }}"
-          author_email: "${{ env.author_email }}"
+          author_name: "${{ secrets.COMMITTER_NAME }}"
+          author_email: "${{ secrets.COMMITTER_EMAIL }}"
           default_author: user_info
           message: "Update manifest.yaml with new packages [automated]"
           push: true
           pull: "--rebase --autostash"
+
+  release:
+    needs: update_manifest
+    if: >
+      ${{ 
+        needs.update_manifest.outputs.manifest_updated == 'true' && 
+        (
+          contains(fromJson(needs.update_manifest.outputs.package_names), 'qbittorrent-nox') ||
+          contains(fromJson(needs.update_manifest.outputs.package_names), 'qbittorrent-nox-nightly') ||
+          contains(fromJson(needs.update_manifest.outputs.package_names), 'rtorrent') ||
+          contains(fromJson(needs.update_manifest.outputs.package_names), 'rtorrent-nightly') ||
+          contains(fromJson(needs.update_manifest.outputs.package_names), 'media-driver') ||
+          contains(fromJson(needs.update_manifest.outputs.package_names), 'transmission') ||
+          contains(fromJson(needs.update_manifest.outputs.package_names), 'transmission-nightly')
+        ) 
+      }}
+    runs-on: ubuntu-24.04
+
+    env:
+      WORKFLOWS_PATH: "${{ github.workspace }}/workflows"
+      PUBLIC_REPO_PATH: "${{ github.workspace }}/binaries"
+      ARCHIVE_REPO_PATH: "${{ github.workspace }}/archived-binaries"
+      DIST_PATH: "${{ github.workspace }}/workflows/dist"
+      TMP_DIR_BASE: "/tmp/release"
+      COMMITTER_NAME: "${{ secrets.COMMITTER_NAME }}"
+      COMMITTER_EMAIL: "${{ secrets.COMMITTER_EMAIL }}"
+
+    steps:
+      - name: Checkout Workflows Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          repository: MediaEase/binaries_workflows
+          path: ${{ env.WORKFLOWS_PATH }}
+
+      - name: Checkout Binaries Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          repository: MediaEase/binaries
+          path: ${{ env.PUBLIC_REPO_PATH }}
+
+      - name: Checkout Archive Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          repository: MediaEase/archived-binaries
+          path: ${{ env.ARCHIVE_REPO_PATH }}
+
+      - name: Initialize Environment Variables
+        id: initialize_environment
+        run: |
+          current_date=$(date +'%Y-%m-%d')
+          echo "CURRENT_DATE=${current_date}" >> $GITHUB_ENV
+          package_names=($(echo '${{ needs.update_manifest.outputs.package_names }}' | jq -r '.[]'))
+          package_versions=($(echo '${{ needs.update_manifest.outputs.package_versions }}' | jq -r '.[]'))
+          package_data=""
+          for i in "${!package_names[@]}"; do
+            package_data+="${package_names[$i]}:${package_versions[$i]};;"
+          done
+          package_data="${package_data%;;}"
+          echo "PACKAGE_DATA=${package_data}" >> $GITHUB_ENV
+          echo "package_data: $package_data"
+          echo "environment_initialized=true" >> $GITHUB_OUTPUT
+      
+      - name: Determine Packages to Include
+        if: ${{ steps.initialize_environment.outputs.environment_initialized == 'true' }}
+        id: determine_packages
+        run: |
+          set -e
+          package_data="${PACKAGE_DATA}"
+          packages_json="[]"
+          IFS=';;' read -r -a package_array <<< "$package_data"
+          for package in "${package_array[@]}"; do
+            if [[ -z "$package" ]]; then
+              continue
+            fi
+            PACKAGE_NAME=$(echo "$package" | cut -d':' -f1)
+            PACKAGE_VERSION=$(echo "$package" | cut -d':' -f2)
+            PACKAGES_TO_INCLUDE=()
+            echo "Package name: $PACKAGE_NAME"
+            echo "Package version: $PACKAGE_VERSION"
+            case "${PACKAGE_NAME}" in
+              rtorrent)
+                PACKAGES_TO_INCLUDE+=("mktorrent/mktorrent*.deb" "libudns/libudns*.deb" "xmlrpc-c/xmlrpc-c-stable*.deb" "rtorrent/rtorrent_*.deb" "libtorrent-rakshasa/libtorrent21*.deb" "libtorrent-rakshasa/libtorrent-dev_*.deb")
+              ;;
+              rtorrent-nightly)
+                PACKAGES_TO_INCLUDE+=("mktorrent/mktorrent*.deb" "libudns/libudns*.deb" "xmlrpc-c/xmlrpc-c-advanced*.deb" "rtorrent/rtorrent-nightly*.deb" "libtorrent-rakshasa/libtorrent22-nightly*.deb" "libtorrent-rakshasa/libtorrent-dev-nightly_*.deb")
+              ;;
+              deluge)
+                PACKAGES_TO_INCLUDE+=("deluge/deluge-common_*.deb" "deluge/deluged_*.deb" "deluge/deluge-web_*.deb" "libtorrent-rasterbar/libtorrent-rasterbar2.0t64_*.deb" "libtorrent-rasterbar/python3-libtorrent_*.deb" "libtorrent-rasterbar/libtorrent-rasterbar-dev_*.deb")
+              ;;
+              transmission)
+                PACKAGES_TO_INCLUDE+=("transmission/transmission-common_*.deb" "transmission/transmission-cli_*.deb")
+              ;;
+              transmission-nightly)
+                PACKAGES_TO_INCLUDE+=("transmission/transmission-common-nightly_*.deb" "transmission/transmission-cli-nightly_*.deb")
+              ;;
+              qbittorrent-nox)
+                PACKAGES_TO_INCLUDE+=("qbittorrent/qbittorrent-nox_*.deb")
+              ;;
+              qbittorrent-nox-nightly)
+                PACKAGES_TO_INCLUDE+=("qbittorrent/qbittorrent-nox-nightly_*.deb")
+              ;;
+              media-driver)
+                PACKAGES_TO_INCLUDE+=("media-driver/mediadriver*.deb" "libva/libva*.deb" "gmmlib/gmmlib*.deb")
+              ;;
+              *)
+                echo "Skipping package: ${PACKAGE_NAME}"
+              ;;
+            esac
+            packages_to_include_json=$(printf '%s\n' "${PACKAGES_TO_INCLUDE[@]}" | jq -R . | jq -s .)
+            package_json=$(jq -n \
+              --arg name "$PACKAGE_NAME" \
+              --arg version "$PACKAGE_VERSION" \
+              --argjson includes "$packages_to_include_json" \
+              '{name: $name, version: $version, includes: $includes}')
+            packages_json=$(echo "$packages_json" | jq --argjson pkg "$package_json" '. += [$pkg]')
+          done
+          echo "packages<<EOF" >> $GITHUB_OUTPUT
+          echo "$packages_json" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "packages_data_collected=true" >> $GITHUB_OUTPUT
+      
+      - name: Build packages
+        if: ${{ steps.determine_packages.outputs.packages_data_collected == 'true' }}
+        id: build_packages
+        run: |
+          set -e
+          tarball_paths=()
+          tarball_names=()
+          ARTIFACTS_DIR="${{ github.workspace }}/artifacts"
+          mkdir -p "$ARTIFACTS_DIR"
+          for row in $(echo '${{ steps.determine_packages.outputs.packages }}' | jq -c '.[]'); do
+            package_name=$(echo "${row}" | jq -r '.name')
+            package_version=$(echo "${row}" | jq -r '.version')
+            includes=$(echo "${row}" | jq -r '.includes[]')
+            TMP_RELEASE_DIR=$(mktemp -d)
+            TAR_PATH="${TMP_RELEASE_DIR}/${package_name}_${package_version}.tar.gz"
+            CHECKSUM_FILE="${TMP_RELEASE_DIR}/${package_name}_${package_version}_checksums.txt"
+            STAGING_DIR=$(mktemp -d)
+            touch "$CHECKSUM_FILE"
+            echo "Processing package: $package_name version: $package_version"
+            for pattern in $includes; do
+              echo "Looking for files matching pattern: ${DIST_PATH}/current/$pattern"
+              package_files=$(find "${DIST_PATH}/current/" -type f -name "$(basename $pattern)")
+              if [[ -z "$package_files" ]]; then
+                echo "Error: No files found for pattern: $pattern"
+                exit 1
+              fi
+              for file in $package_files; do
+                echo "Found file: $file"
+                cp "$file" "$STAGING_DIR/"
+                checksum=$(sha256sum "$file" | awk '{print $1}')
+                echo "$(basename "$file"): $checksum" >> "$CHECKSUM_FILE"
+              done
+            done
+            mv "$CHECKSUM_FILE" "$STAGING_DIR/"
+            tar -czf "$TAR_PATH" -C "$STAGING_DIR" .
+            cp "$TAR_PATH" "$ARTIFACTS_DIR/"
+            tarball_paths+=("$ARTIFACTS_DIR/$(basename $TAR_PATH)")
+            tarball_names+=("$(basename $TAR_PATH)")
+            echo "Generated tarball: $TAR_PATH"
+          done
+          tarball_paths_json=$(printf '%s\n' "${tarball_paths[@]}" | jq -R . | jq -s -c .)
+          tarball_names_json=$(printf '%s\n' "${tarball_names[@]}" | jq -R . | jq -s -c .)
+          echo "tarball_paths<<EOF" >> $GITHUB_OUTPUT
+          echo "${tarball_paths_json}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "tarball_names<<EOF" >> $GITHUB_OUTPUT
+          echo "${tarball_names_json}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "tarballs_generated=true" >> $GITHUB_OUTPUT
+
+      - name: Generate Commit Messages
+        if: ${{ steps.build_packages.outputs.tarballs_generated == 'true' }}
+        id: generate_commit_message
+        run: |
+          set -e
+          JSON_PACKAGES=$(echo '${{ steps.determine_packages.outputs.packages }}')
+          PACKAGE_NAME=$(echo "${JSON_PACKAGES}" | jq -r '.[0].name' | sed 's/-nightly//')
+          COMMIT_MESSAGE="Update ${PACKAGE_NAME} binaries [automated]\nThis commit includes:\n"
+          ARCHIVE_MESSAGE="Archive old binaries [automated]\n"
+          NIGHTLY_PACKAGES=""
+          for row in $(echo "${JSON_PACKAGES}" | jq -c '.[]'); do
+            package_name=$(echo "${row}" | jq -r '.name')
+            package_version=$(echo "${row}" | jq -r '.version')
+            release_name="${package_name} ${package_version} Release"
+            if [[ "${package_name}" =~ -nightly$ ]]; then
+              NIGHTLY_PACKAGES+=" - ${package_name} v${package_version}\n"
+            else
+              COMMIT_MESSAGE+=" - ${package_name} v${package_version}\n"
+            fi
+          done
+          if [[ -n "${NIGHTLY_PACKAGES}" ]]; then
+            COMMIT_MESSAGE+="\nNightly packages:\n${NIGHTLY_PACKAGES}"
+          fi
+          echo "COMMIT_MESSAGE<<EOF" >> $GITHUB_OUTPUT
+          echo "${COMMIT_MESSAGE}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "ARCHIVE_MESSAGE<<EOF" >> $GITHUB_OUTPUT
+          echo "${ARCHIVE_MESSAGE}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "commit_messages_generated=true" >> $GITHUB_OUTPUT
+      
+      # - name: Upload artifacts
+      #   if: ${{ steps.build_packages.outputs.tarballs_generated == 'true' }}
+      #   id: upload_artifacts
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: release-tarballs
+      #     path: ${{ github.workspace }}/artifacts/*.tar.gz
+      #     if-no-files-found: error
+          
+      # - name: Update Release Repo
+      #   uses: peter-evans/repository-dispatch@v3
+      #   with:
+      #     event-type: update-files
+      #     repository: MediaEase/binaries
+      #     token: ${{ secrets.MEDIAEASE_ACCESS_TOKEN }}
+      #     client-payload: |
+      #       {
+      #         "tarball_paths": ${{ steps.build_packages.outputs.tarball_paths }},
+      #         "tarball_names": ${{ steps.build_packages.outputs.tarball_names }},
+      #         "artifact_id": "${{ steps.upload_artifacts.outputs.artifact-id }}",
+      #         "artifact_url": "${{ steps.upload_artifacts.outputs.artifact-url }}",
+      #         "commit_message": "${{ steps.generate_commit_message.outputs.COMMIT_MESSAGE }}",
+      #         "archive_message": "${{ steps.generate_commit_message.outputs.ARCHIVE_MESSAGE }}"
+      #       }
+
+      # move ${{ github.workspace }}/artifacts/* to the $PUBLIC_REPO_PATH
+      - name: Move tarballs to release directory
+        if: ${{ steps.build_packages.outputs.tarballs_generated == 'true' }}
+        run: |
+          set -e
+          mkdir -p ${{ env.PUBLIC_REPO_PATH }}/pool/
+          for tarball in ${{ github.workspace }}/artifacts/*.tar.gz; do
+            mv $tarball ${{ env.PUBLIC_REPO_PATH }}/pool
+          done
+
+      - name: Commit and Push Release
+        if: ${{ steps.build_packages.outputs.tarballs_generated == 'true' }}
+        uses: EndBug/add-and-commit@v9
+        with:
+          author_name: "${{ secrets.COMMITTER_NAME }}"
+          author_email: "${{ secrets.COMMITTER_EMAIL }}"
+          committer_name: "${{ secrets.COMMITTER_NAME }}"
+          committer_email: "${{ secrets.COMMITTER_EMAIL }}"
+          default_author: user_info
+          message: "${{ steps.generate_commit_message.outputs.COMMIT_MESSAGE }}"
+          cwd: ./binaries
+          add: |
+            pool/
+          push: true
+          pull: "--rebase --autostash"
+      
