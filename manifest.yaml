@@ -119,17 +119,17 @@ packages:
     distribution:
     - bookworm
   qbittorrent-nox-nightly:
-    version: 5.0.2-1build1
-    checksum_sha256: 8dec6b9cce538eb19b41df563d2e724e5eff3b47dd3c982ba2dece268d64ffff
+    version: 5.0.2-1build3
+    checksum_sha256: fd226b339cc36a417df5d4653f93a88774b30b71cd1cf9d50f4955b50d684af0
     category: qbittorrent
-    build_date: '2024-12-02'
+    build_date: '2024-12-04'
     distribution:
     - bookworm
   qbittorrent-nox:
-    version: 5.0.2-1build1
-    checksum_sha256: 7a6f706ab7dd544f173bc125a581c260fe69b7b965bf988068b4fc39e13da5ae
+    version: 5.0.2-1build3
+    checksum_sha256: dd7ca353a5392a8cdd3633a9cb2dc6f5657a39568c41bda3131e029e405a1172
     category: qbittorrent
-    build_date: '2024-12-02'
+    build_date: '2024-12-04'
     distribution:
     - bookworm
   libtorrent-rasterbar2.0t64:
