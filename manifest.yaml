@@ -133,17 +133,17 @@ packages:
     distribution:
     - bookworm
   libtorrent-rasterbar2.0t64:
-    version: 2.0.10-1.1build2
-    checksum_sha256: 64719ecc6a076b34a335b66b5576884f78e8608e4d9c12f68d5453f175293b69
+    version: 2.0.10-1.1build3
+    checksum_sha256: 9ebb6ba6827e1b2fb79e97e5e88dae135f8b3a1541878331385694e6a103d78b
     category: libtorrent-rasterbar
-    build_date: '2024-11-22'
+    build_date: '2024-12-08'
     distribution:
     - bookworm
   libtorrent-rasterbar-dev:
-    version: 2.0.10-1.1build2
-    checksum_sha256: 69d73f59bc2947fb4ff0d4ce9c008e5ffe125f2dfdbe2d83b5fa1cc24c353975
+    version: 2.0.10-1.1build3
+    checksum_sha256: 74046154419b66b58ddb14bfafadebe051dda4939bd4e9433f85a9ff0804bc31
     category: libtorrent-rasterbar
-    build_date: '2024-11-22'
+    build_date: '2024-12-08'
     distribution:
     - bookworm
   libtorrent21t64:
@@ -175,10 +175,10 @@ packages:
     distribution:
     - bookworm
   python3-libtorrent:
-    version: 2.0.10-1.1build2
-    checksum_sha256: b0beb9481227aa09ece3b5efdcb6ee8e197a2875b5a5b6217471f3dc96f19f0a
+    version: 2.0.10-1.1build3
+    checksum_sha256: 18041ac3e1f40c3849b2d1c46c157e2284293152c4ab780627855fbd35ccfc49
     category: libtorrent-rasterbar
-    build_date: '2024-11-22'
+    build_date: '2024-12-08'
     distribution:
     - bookworm
 applications:
