@@ -181,6 +181,13 @@ packages:
     build_date: '2024-12-08'
     distribution:
     - bookworm
+  ? ''
+  : version: 1.2.0-1build1
+    checksum_sha256: cc334af47c09c54bfc2e1120253fbc07031737ec02610d050ccc3f97e35b357e
+    category: mktorrent
+    build_date: '2024-12-08'
+    distribution:
+    - bookworm
 applications:
   bookworm: null
   rtorrent:
