@@ -105,6 +105,7 @@ jobs:
           echo "ARCHITECTURE=${ARCHITECTURE}" >> $GITHUB_OUTPUT
           echo "PACKAGE_NAME=${PACKAGE_NAME}" >> $GITHUB_OUTPUT
           echo "DEV_PACKAGE_NAME=${DEV_PACKAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "CURRENT_DATE=${CURRENT_DATE}" >> $GITHUB_OUTPUT
           echo "update_needed=true" >> $GITHUB_OUTPUT
 
       - name: Apply Patches (if needed)
@@ -162,9 +163,15 @@ jobs:
           echo "  PACKAGE_NAME=$PACKAGE_NAME"
           echo "  DEV_PACKAGE_NAME=$DEV_PACKAGE_NAME"
           echo "  INSTALL_DIR=$INSTALL_DIR"
-          bash "${env.SCRIPTS_PATH}/build_libtorrent.sh" "$ARCHITECTURE" "$FULL_VERSION" "$PACKAGE_NAME" "$DEV_PACKAGE_NAME" "$INSTALL_DIR"
-          if [ -n "$(find packaging_dir -type f -name "${PACKAGE_NAME}*.deb")" ]; then
+          bash "${{ env.SCRIPTS_PATH }}/build_libtorrent.sh" "$ARCHITECTURE" "$FULL_VERSION" "$PACKAGE_NAME" "$DEV_PACKAGE_NAME" "$INSTALL_DIR"
+          echo "Looking for package files..."
+          runtime_deb=$(find /tmp -maxdepth 2 -type f -name "${PACKAGE_NAME}*.deb" | head -n 1)
+          dev_deb=$(find /tmp -maxdepth 2 -type f -name "${DEV_PACKAGE_NAME}*.deb" | head -n 1)
+          echo "Runtime package found: $runtime_deb"
+          echo "Dev package found: $dev_deb"
+          if [ -n "$runtime_deb" ] && [ -n "$dev_deb" ]; then
             echo "libtorrent_packaged=true" >> $GITHUB_OUTPUT
+            echo "packaging_dir=$(dirname "$runtime_deb")" >> $GITHUB_OUTPUT
           else
             echo "libtorrent_packaged=false" >> $GITHUB_OUTPUT
             exit 1
@@ -177,25 +184,26 @@ jobs:
           FULL_VERSION: ${{ steps.libtorrent_update.outputs.FULL_VERSION }}
           CURRENT_DATE: ${{ steps.libtorrent_update.outputs.CURRENT_DATE }}
           ARCHITECTURE: ${{ steps.libtorrent_update.outputs.ARCHITECTURE }}
+          PACKAGING_DIR: ${{ steps.run_packaging.outputs.packaging_dir }}
         run: |
           set -e
           ARTIFACTS_DIR="${GITHUB_WORKSPACE}/artifacts"
           mkdir -p "$ARTIFACTS_DIR"
-          for deb in packaging_dir/*.deb; do
+          for deb in $(find "${PACKAGING_DIR}" -type f -name "*.deb"); do
             fname=$(basename "$deb")
             pkg_base="${fname%%_*}"
             echo "Processing $fname (base: $pkg_base)"
             checksum=$(sha256sum "$deb" | awk '{print $1}')
             json_file="${pkg_base}.json"
             cat > "$json_file" <<EOF
-            {
-              "package_name": "$fname",
-              "checksum": "$checksum",
-              "version": "$FULL_VERSION",
-              "category": "libtorrent",
-              "build_date": "$CURRENT_DATE"
-            }
-            EOF
+          {
+            "package_name": "$fname",
+            "checksum": "$checksum",
+            "version": "$FULL_VERSION",
+            "category": "libtorrent",
+            "build_date": "$CURRENT_DATE"
+          }
+          EOF
             pkg_artifact_dir="$ARTIFACTS_DIR/$pkg_base"
             mkdir -p "$pkg_artifact_dir"
             cp "$json_file" "$pkg_artifact_dir/"
@@ -203,7 +211,7 @@ jobs:
             tar -czf "$ARTIFACTS_DIR/${pkg_base}.tar.gz" -C "$ARTIFACTS_DIR" "$pkg_base"
             rm -rf "$pkg_artifact_dir"
           done
-          echo "artifact_ready=true" >> $GITHUB_OUTPUT  
+          echo "artifact_ready=true" >> $GITHUB_OUTPUT
 
       - name: Upload Package Data
         id: upload_package_data

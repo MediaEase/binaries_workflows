@@ -18,27 +18,27 @@ INSTALL_DIR="$5"
 MAINTAINER="Jose Luis Rivas <ghostbar@debian.org>, Thomas Chauveau <contact.tomc@yahoo.fr>"
 
 ########################################
-# 4. Download libtorrent-dev and libtorrent21
+# 4. Download libtorrent-dev and libtorrent21t64
 ########################################
-echo "Downloading libtorrent-dev and libtorrent21..."
-apt-get update -qq
-apt-get download libtorrent-dev libtorrent21
+echo "Downloading libtorrent-dev and libtorrent21t64..."
+sudo apt-get update -qq
+sudo apt-get download libtorrent-dev libtorrent21t64
 
 deb_dev=$(find . -maxdepth 3 -name 'libtorrent-dev_*.deb' | head -n 1)
 echo "Downloaded libtorrent-dev : $deb_dev"
 doc_extract_dir=$(mktemp -d)
-dpkg-deb -x "$deb_dev" "$doc_extract_dir"
+sudo dpkg-deb -x "$deb_dev" "$doc_extract_dir"
 DOC_SRC="${doc_extract_dir}/usr/share/doc/libtorrent-dev"
 if [ ! -d "$DOC_SRC" ]; then
     echo "Error: Documentation directory not found in $deb_dev"
     exit 1
 fi
 
-# Extraction du paquet libtorrent21 pour récupérer la structure officielle
-deb_rt21=$(find . -maxdepth 3 -name 'libtorrent21_*.deb' | head -n 1)
-echo "Downloaded libtorrent21 : $deb_rt21"
+# Extraction du paquet libtorrent21t64 pour récupérer la structure officielle
+deb_rt21=$(find . -maxdepth 3 -name 'libtorrent21t64_*.deb' | head -n 1)
+echo "Downloaded libtorrent21t64 : $deb_rt21"
 runtime_extract_dir=$(mktemp -d)
-dpkg-deb -x "$deb_rt21" "$runtime_extract_dir"
+sudo dpkg-deb -x "$deb_rt21" "$runtime_extract_dir"
 
 ########################################
 # Build the runtime package (RUNTIME_PKG)
@@ -48,12 +48,20 @@ echo "Create runtime package structure ($RUNTIME_PKG)..."
 mkdir -p "$pkg_runtime/usr"
 rsync -a --exclude='*.deb' "$runtime_extract_dir/usr/" "$pkg_runtime/usr/"
 rt_lib_dir="$pkg_runtime/usr/lib/x86_64-linux-gnu"
-rm -f "$rt_lib_dir/libtorrent.so.21.0.0"
-cp "$INSTALL_DIR/usr/lib/libtorrent.so.23.0.0" "$rt_lib_dir/"
+LIB_FILE=$(find "$INSTALL_DIR/usr/lib" -maxdepth 1 -type f -name "libtorrent.so.*" | sort | tail -n 1)
+if [ -z "$LIB_FILE" ]; then
+    echo "Erreur : fichier libtorrent.so non trouvé dans $INSTALL_DIR/usr/lib"
+    exit 1
+fi
+LIB_FILENAME=$(basename "$LIB_FILE")
+MAJOR_VERSION=$(echo "$LIB_FILENAME" | cut -d'.' -f2)
+echo "Bibliothèque détectée : $LIB_FILENAME (version majeure : $MAJOR_VERSION)"
+rt_lib_dir="$pkg_runtime/usr/lib/x86_64-linux-gnu"
+rm -f "$rt_lib_dir"/libtorrent.so*
+cp "$INSTALL_DIR/usr/lib/$LIB_FILENAME" "$rt_lib_dir/"
 cd "$rt_lib_dir"
-rm -f libtorrent.so.21 libtorrent.so
-ln -s libtorrent.so.23.0.0 libtorrent.so.23
-doc_dir="$pkg_runtime/usr/share/doc/libtorrent21"
+ln -s "$LIB_FILENAME" "libtorrent.so.${MAJOR_VERSION}"
+doc_dir="$pkg_runtime/usr/share/doc/libtorrent21t64"
 if [ -d "$doc_dir" ]; then
     mv "$doc_dir" "$pkg_runtime/usr/share/doc/$RUNTIME_PKG"
 else
@@ -96,7 +104,8 @@ mkdir -p "$pkg_dev/usr/share/doc/$DEV_PKG"
 cp -r "$DOC_SRC/." "$pkg_dev/usr/share/doc/$DEV_PKG/"
 mkdir -p "$pkg_dev/usr/lib/x86_64-linux-gnu"
 cd "$pkg_dev/usr/lib/x86_64-linux-gnu"
-ln -s libtorrent.so.23.0.0 libtorrent.so
+rm -f libtorrent.so*
+ln -s "$LIB_FILENAME" libtorrent.so
 dev_size=$(du -s -k "$pkg_dev/usr" | cut -f1)
 
 mkdir -p "$pkg_dev/DEBIAN"
@@ -128,6 +137,6 @@ EOF
 ########################################
 packaging_dir=$(mktemp -d)
 echo "Building packages..."
-dpkg-deb --build "$pkg_runtime" "$packaging_dir/${RUNTIME_PKG}_${FULL_VERSION}_${ARCHITECTURE}.deb"
-dpkg-deb --build "$pkg_dev" "$packaging_dir/${DEV_PKG}_${FULL_VERSION}_${ARCHITECTURE}.deb"
+sudo dpkg-deb --build "$pkg_runtime" "$packaging_dir/${RUNTIME_PKG}_${FULL_VERSION}_${ARCHITECTURE}.deb"
+sudo dpkg-deb --build "$pkg_dev" "$packaging_dir/${DEV_PKG}_${FULL_VERSION}_${ARCHITECTURE}.deb"
 rm -rf "$pkg_runtime" "$pkg_dev"
