@@ -188,6 +188,48 @@ packages:
     build_date: '2025-03-02'
     distribution:
     - bookworm
+  libtorrent-dev_0.13.8-1build1_amd64.deb:
+    version: 0.13.8-1build1
+    checksum_sha256: 130ae917929d3d7407c0ce5f6f642883501ca2eab0097f786c6ef2cefc795ab3
+    category: libtorrent
+    build_date: '2025-03-08'
+    distribution:
+    - bookworm
+  libtorrent-dev_0.14.0-1build1_amd64.deb:
+    version: 0.14.0-1build1
+    checksum_sha256: f9aa6ea1404f08617727d68b943accd0428e2a7f0ca084bc4534d9905c83b655
+    category: libtorrent
+    build_date: '2025-03-08'
+    distribution:
+    - bookworm
+  libtorrent-dev_0.15.1-1build1_amd64.deb:
+    version: 0.15.1-1build1
+    checksum_sha256: 1081d6d78ca89822e0ea3832dc9e488c1c0b810016d71a99777f4125c42c04a7
+    category: libtorrent
+    build_date: '2025-03-08'
+    distribution:
+    - bookworm
+  libtorrent21_0.13.8-1build1_amd64.deb:
+    version: 0.13.8-1build1
+    checksum_sha256: 60dbb5c13fd5e49bd478460f4374eca4b9438fd7bc120c9e7983d81d572b956d
+    category: libtorrent
+    build_date: '2025-03-08'
+    distribution:
+    - bookworm
+  libtorrent22_0.14.0-1build1_amd64.deb:
+    version: 0.14.0-1build1
+    checksum_sha256: 49afef12cbcbac1d3a6da5be528c9b84d12d0848d59ee770740ecd5180c8735e
+    category: libtorrent
+    build_date: '2025-03-08'
+    distribution:
+    - bookworm
+  libtorrent24_0.15.1-1build1_amd64.deb:
+    version: 0.15.1-1build1
+    checksum_sha256: 22a9f0fa7cd6dc4b9897002c3f5a24ae75e1c1d4244ccc0babf6fbe25f765284
+    category: libtorrent
+    build_date: '2025-03-08'
+    distribution:
+    - bookworm
 applications:
   bookworm: null
   rtorrent:
