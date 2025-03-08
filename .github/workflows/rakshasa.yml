@@ -22,19 +22,19 @@ jobs:
             libtorrent_package_name: libtorrent24
             libtorrent_dev_package_name: libtorrent-dev
             libtorrent_version: 0.15.1
-            libtorrent_package_suffix: "-nightly"
+            tag: "next"
             branch_ref: master
           - build_type: release
             libtorrent_package_name: libtorrent22
             libtorrent_dev_package_name: libtorrent-dev
             libtorrent_version: 0.14.0
-            libtorrent_package_suffix: ""
+            tag: "stable"
             branch_ref: v0.14.0
           - build_type: release
             libtorrent_package_name: libtorrent21
             libtorrent_dev_package_name: libtorrent-dev
             libtorrent_version: 0.13.8
-            libtorrent_package_suffix: ""
+            tag: "super-stable"
             branch_ref: v0.13.8
     env:
       REPO_PATH: "${{ github.workspace }}/binaries"
@@ -68,9 +68,9 @@ jobs:
           time_diff: ${{ env.TIME_DIFF }}
           REF: ${{ matrix.branch_ref }}
           LIBTORRENT_VERSION: ${{ matrix.libtorrent_version }}
-          PACKAGE_SUFFIX: ${{ matrix.libtorrent_package_suffix }}
           PACKAGE_NAME: ${{ matrix.libtorrent_package_name }}
           DEV_PACKAGE_NAME: ${{ matrix.libtorrent_dev_package_name }}
+          PACKAGE_TAG: ${{ matrix.tag }}
         run: |
           set -e
           CURRENT_TIME=$(date +%s)
@@ -99,7 +99,7 @@ jobs:
           fi
           ARCHITECTURE="amd64"
           CURRENT_DATE=$(date +%Y-%m-%d)
-          BUILD_NUMBER=$(bash ${{ env.SCRIPTS_PATH }}/increment_revision.sh "${PACKAGE_NAME}${PACKAGE_SUFFIX}" "$LIBTORRENT_VERSION" "${{ env.CURRENT_LIBTORRENT_PATH }}")
+          BUILD_NUMBER=$(bash ${{ env.SCRIPTS_PATH }}/increment_revision.sh "${PACKAGE_NAME}${PACKAGE_TAG}" "$LIBTORRENT_VERSION" "${{ env.CURRENT_LIBTORRENT_PATH }}")
           FULL_VERSION="${LIBTORRENT_VERSION}-1${BUILD_NUMBER}"
           echo "FULL_VERSION=${FULL_VERSION}" >> $GITHUB_OUTPUT
           echo "ARCHITECTURE=${ARCHITECTURE}" >> $GITHUB_OUTPUT
@@ -155,6 +155,7 @@ jobs:
           DEV_PACKAGE_NAME: ${{ steps.libtorrent_update.outputs.DEV_PACKAGE_NAME }}
           INSTALL_DIR: ${{ steps.libtorrent_build.outputs.INSTALL_DIR }}
           SCRIPTS_PATH: ${{ env.SCRIPTS_PATH }}
+          PACKAGE_TAG: ${{ matrix.tag }}
         run: |
           set -e
           echo "Running packaging.sh with arguments:"
@@ -163,7 +164,7 @@ jobs:
           echo "  PACKAGE_NAME=$PACKAGE_NAME"
           echo "  DEV_PACKAGE_NAME=$DEV_PACKAGE_NAME"
           echo "  INSTALL_DIR=$INSTALL_DIR"
-          bash "${{ env.SCRIPTS_PATH }}/build_libtorrent.sh" "$ARCHITECTURE" "$FULL_VERSION" "$PACKAGE_NAME" "$DEV_PACKAGE_NAME" "$INSTALL_DIR"
+          bash "${{ env.SCRIPTS_PATH }}/build_libtorrent.sh" "$ARCHITECTURE" "$FULL_VERSION" "$PACKAGE_NAME" "$DEV_PACKAGE_NAME" "$INSTALL_DIR" "$PACKAGE_TAG"
           echo "Looking for package files..."
           runtime_deb=$(find /tmp -maxdepth 2 -type f -name "${PACKAGE_NAME}*.deb" | head -n 1)
           dev_deb=$(find /tmp -maxdepth 2 -type f -name "${DEV_PACKAGE_NAME}*.deb" | head -n 1)
@@ -185,30 +186,31 @@ jobs:
           CURRENT_DATE: ${{ steps.libtorrent_update.outputs.CURRENT_DATE }}
           ARCHITECTURE: ${{ steps.libtorrent_update.outputs.ARCHITECTURE }}
           PACKAGING_DIR: ${{ steps.run_packaging.outputs.packaging_dir }}
+          PACKAGE_TAG: ${{ matrix.PACKAGE_TAG }}
         run: |
           set -e
           ARTIFACTS_DIR="${GITHUB_WORKSPACE}/artifacts"
           mkdir -p "$ARTIFACTS_DIR"
           for deb in $(find "${PACKAGING_DIR}" -type f -name "*.deb"); do
             fname=$(basename "$deb")
-            pkg_base="${fname%%_*}"
-            echo "Processing $fname (base: $pkg_base)"
+            package_id="${fname%%_*}"
+            echo "Processing $fname (package: $package_id)"
             checksum=$(sha256sum "$deb" | awk '{print $1}')
-            json_file="${pkg_base}.json"
-            cat > "$json_file" <<EOF
-          {
-            "package_name": "$fname",
-            "checksum": "$checksum",
-            "version": "$FULL_VERSION",
-            "category": "libtorrent",
-            "build_date": "$CURRENT_DATE"
-          }
-          EOF
-            pkg_artifact_dir="$ARTIFACTS_DIR/$pkg_base"
+            json_file="${package_id}.json"
+            jq -n --arg package_id "$package_id" --arg version "$FULL_VERSION" --arg checksum_sha256 "$checksum" --arg build_date "$CURRENT_DATE" --arg tag "$PACKAGE_TAG" '{
+              package_id: $package_id,
+              version: $version,
+              checksum_sha256: $checksum_sha256,
+              build_date: $build_date,
+              category: "libtorrent",
+              tag: $tag,
+              distribution: ["bookworm"]
+            }' > "$json_file"
+            pkg_artifact_dir="$ARTIFACTS_DIR/$package_id"
             mkdir -p "$pkg_artifact_dir"
             cp "$json_file" "$pkg_artifact_dir/"
             cp "$deb" "$pkg_artifact_dir/"
-            tar -czf "$ARTIFACTS_DIR/${pkg_base}.tar.gz" -C "$ARTIFACTS_DIR" "$pkg_base"
+            tar -czf "$ARTIFACTS_DIR/${package_id}.tar.gz" -C "$ARTIFACTS_DIR" "$package_id"
             rm -rf "$pkg_artifact_dir"
           done
           echo "artifact_ready=true" >> $GITHUB_OUTPUT

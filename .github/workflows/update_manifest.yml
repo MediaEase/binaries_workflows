@@ -39,20 +39,23 @@ jobs:
       - name: Extract Package Data
         id: extract_package_data
         run: |
-          package_updates=$(echo '${{ toJson(github.event.client_payload) }}' | jq -c '.package_updates')
+          set -e
+          manifest=$(echo '${{ toJson(github.event.client_payload) }}' | jq -c '.packages_updates')
+          echo "Extracting package data from manifest..."
           package_names=()
           package_versions=()
-          echo "Extracting package data..."
-          for row in $(echo "${package_updates}" | jq -c 'to_entries[]'); do
-            package_name=$(echo "${row}" | jq -r '.key')
-            package_version=$(echo "${row}" | jq -r '.value.version')
-            package_names+=("$package_name")
-            package_versions+=("$package_version")
-            echo "Found package: $package_name, version: $package_version"
+          for type in $(echo "$manifest" | jq -r 'keys[]'); do
+            for pkg in $(echo "$manifest" | jq -r ".[$type] | keys[]"); do
+              for ver in $(echo "$manifest" | jq -r ".[$type][$pkg] | keys[]"); do
+                echo "Found package: $pkg, version: $ver, type: $type"
+                package_names+=("$pkg")
+                package_versions+=("$ver")
+              done
+            done
           done
           package_names_json=$(printf '%s\n' "${package_names[@]}" | jq -R . | jq -s -c .)
           package_versions_json=$(printf '%s\n' "${package_versions[@]}" | jq -R . | jq -s -c .)
-          echo "Including all packages (nightly and regular)..."
+          echo "Including all packages (runtime and development)..."
           echo "package_names<<EOF" >> $GITHUB_OUTPUT
           echo "${package_names_json}" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT

@@ -4,7 +4,7 @@ set -e
 ########################################
 # 1. Configuration variables
 ########################################
-if [ "$#" -ne 5 ]; then
+if [ "$#" -ne 6 ]; then
     echo "Usage: $0 <ARCHITECTURE> <FULL_VERSION> <RUNTIME_PKG> <DEV_PKG> <INSTALL_DIR>"
     exit 1
 fi
@@ -14,6 +14,7 @@ FULL_VERSION="$2"
 RUNTIME_PKG="$3"
 DEV_PKG="$4"
 INSTALL_DIR="$5"
+TAG="$6"
 
 MAINTAINER="Jose Luis Rivas <ghostbar@debian.org>, Thomas Chauveau <contact.tomc@yahoo.fr>"
 
@@ -137,6 +138,6 @@ EOF
 ########################################
 packaging_dir=$(mktemp -d)
 echo "Building packages..."
-sudo dpkg-deb --build "$pkg_runtime" "$packaging_dir/${RUNTIME_PKG}_${FULL_VERSION}_${ARCHITECTURE}.deb"
-sudo dpkg-deb --build "$pkg_dev" "$packaging_dir/${DEV_PKG}_${FULL_VERSION}_${ARCHITECTURE}.deb"
+sudo dpkg-deb --build "$pkg_runtime" "$packaging_dir/${RUNTIME_PKG}-${TAG}_${FULL_VERSION}_${ARCHITECTURE}.deb"
+sudo dpkg-deb --build "$pkg_dev" "$packaging_dir/${DEV_PKG}-${TAG}_${FULL_VERSION}_${ARCHITECTURE}.deb"
 rm -rf "$pkg_runtime" "$pkg_dev"
