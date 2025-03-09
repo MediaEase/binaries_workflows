@@ -4,6 +4,7 @@ packages:
       checksum_sha256: 48be53a10697d28cb8f712759b2ffbc9f76832d5b94b7f84dd57f575e9714fef
       build_date: '2024-10-28'
       category: xmlrpc-c
+      build: 1build1
       tag: next
       distribution:
       - bookworm
@@ -11,21 +12,24 @@ packages:
       checksum_sha256: 69769c9c17d44fe4e2f902accddee3346a28aa54a67a6cc1d319d33b63d05403
       build_date: '2024-10-28'
       category: xmlrpc-c
+      build: 1build1
       tag: super-stable
       distribution:
       - bookworm
     1.60.4:
       checksum_sha256: 4ec7fd3cd35b426b834a46951ec7344906026ef55bf1fbef52b2d714dbafbf59
       build_date: '2024-10-28'
-      category: xmlrpc-c
+      category: xmlrpc-c 
+      build: 1build1
       tag: stable
       distribution:
       - bookworm
   mktorrent:
-    1.2.0-1build13:
+    1.2.0:
       checksum_sha256: c19a2385115bf018b9f691cf828cdd387e3dc9b5dd407644d7f704c37a3589d0
       build_date: '2025-03-02'
       category: mktorrent
+      build: 1build1
       tag: stable
       distribution:
       - bookworm
@@ -33,37 +37,42 @@ packages:
     0.4.1-1build1:
       checksum_sha256: c1a0a3d1d256259e7070858a1ee9cdd4df17d8b95771491de4fee67eb29ff690
       build_date: '2024-11-02'
-      category: libudns
+      category: libudns 
+      build: 1build1
       tag: stable
       distribution:
       - bookworm
   deluge:
-    2.0.3-4build1:
+    2.0.3:
       checksum_sha256: 2eb8d5a4af51032c846081594de40507
       build_date: '2024-05-10'
-      category: deluge
+      category: deluge 
+      build: 1build1
       tag: stable
       distribution:
       - bookworm
-    2.1.1-1build1:
+    2.1.1:
       checksum_sha256: fb9177f44b79623642ab590a9659d805
       build_date: '2024-05-10'
-      category: deluge
+      category: deluge 
+      build: 1build1
       tag: next
       distribution:
       - bookworm
   deluge-web:
-    2.0.3-4build1:
+    2.0.3:
       checksum_sha256: 2eb8d5a4af51032c846081594de40507
       build_date: '2024-05-10'
-      category: deluge
+      category: deluge 
+      build: 1build1
       tag: stable
       distribution:
       - bookworm
     2.1.1-1build1:
       checksum_sha256: fb9177f44b79623642ab590a9659d805
       build_date: '2024-05-10'
-      category: deluge
+      category: deluge 
+      build: 1build1
       tag: next
       distribution:
       - bookworm
@@ -71,149 +80,169 @@ packages:
     2.0.3-4build1:
       checksum_sha256: 2eb8d5a4af51032c846081594de40507
       build_date: '2024-05-10'
-      category: deluge
+      category: deluge 
+      build: 1build1
       tag: stable
       distribution:
       - bookworm
     2.1.1-1build1:
       checksum_sha256: fb9177f44b79623642ab590a9659d805
       build_date: '2024-05-10'
-      category: deluge
+      category: deluge 
+      build: 1build1
       tag: next
       distribution:
       - bookworm
   rtorrent:
-    0.9.8-1build14:
+    0.9.8:
       checksum_sha256: ad6dbbca591ffb1eb6936148eaadb370ea273c3b8298478426ac111a9526fd7b
       build_date: '2024-12-25'
-      category: libtorrent
+      category: libtorrent 
+      build: 1build1
       tag: super-stable
       distribution:
       - bookworm
-    0.10.0-1build14:
+    0.10.0:
       checksum_sha256: 9bcfe652f65661491bc512c3a5884a5f57798c19947b07bf9cbedfff4120d95d
       build_date: '2024-12-25'
-      category: libtorrent
+      category: libtorrent 
+      build: 1build1
       tag: stable
       distribution:
       - bookworm
-    0.15.1-1build1:
+    0.15.1:
       checksum_sha256: 1081d6d78ca89822e0ea3832dc9e488c1c0b810016d71a99777f4125c42c04a7
       build_date: '2025-03-08'
-      category: libtorrent
+      category: libtorrent 
+      build: 1build1
       tag: next
       distribution:
       - bookworm
   transmission-cli:
-    4.0.6-1build1:
+    4.0.6:
       checksum_sha256: 00fdb3169bddb4444ebd4a326f7e119c94ea2106c2698202122a0cf96a1d5c70
       build_date: '2025-03-07'
-      category: transmission
+      category: transmission 
+      build: 1build1
       tag: stable
       distribution:
       - bookworm
-    4.1.0-1build1:
+    4.1.0:
       checksum_sha256: eba6bfaca80c3395587ede28c80960178fca1f91233eb0f0c7624494c9b261a8
       build_date: '2025-03-07'
-      category: transmission
+      category: transmission 
+      build: 1build1
       tag: next
       distribution:
       - bookworm
   transmission-common:
-    4.0.6-1build1:
+    4.0.6:
       checksum_sha256: 7587d5e4f7a7450d44e38e52e3fe568618fcb260cbe610a1dee1ba32928b6f78
       build_date: '2025-03-07'
-      category: transmission
+      category: transmission 
+      build: 1build1
       tag: stable
       distribution:
       - bookworm
-    4.1.0-1build1:
+    4.1.0:
       checksum_sha256: 3c0e3ee0224593d32b597e44e74a3a90497f52cf95f6c98b2270c95f6feacb0b
       build_date: '2025-03-07'
-      category: transmission
+      category: transmission 
+      build: 1build1
       tag: next
       distribution:
       - bookworm
   qbittorrent-nox:
-    5.1.0rc1-1build3:
+    5.1.0rc1:
       checksum_sha256: dd7ca353a5392a8cdd3633a9cb2dc6f5657a39568c41bda3131e029e405a1172
       build_date: '2024-12-04'
-      category: qbittorrent
+      category: qbittorrent 
+      build: 1build1
       tag: next
       distribution:
       - bookworm
-    5.0.2-1build3:
+    5.0.2:
       checksum_sha256: fd226b339cc36a417df5d4653f93a88774b30b71cd1cf9d50f4955b50d684af0
       build_date: '2024-12-04'
-      category: qbittorrent
+      category: qbittorrent 
+      build: 1build1
       tag: stable
       distribution:
       - bookworm
   libtorrent-rasterbar2.0t64:
-    2.0.11-1.1build6:
+    2.0.11:
       checksum_sha256: 59196712aa316ca7b4cc8ba211234b1463f7758857d99f71d6594b672aa9a8c7
       build_date: '2025-03-02'
-      category: libtorrent-rasterbar
+      category: libtorrent-rasterbar 
+      build: 1build1
       tag: stable
       distribution:
       - bookworm
   python3-libtorrent:
-    2.0.11-1.1build6:
+    2.0.11:
       checksum_sha256: 4c2aa6d266bda9cfcf7b78c88908861713f337a2769fed9e5397e67372524c85
       build_date: '2025-03-02'
-      category: libtorrent-rasterbar
+      category: libtorrent-rasterbar 
+      build: 1build1
       tag: stable
       distribution:
       - bookworm
   libtorrent:
-    0.13.8-1build3:
+    0.13.8:
       checksum_sha256: 9ba8cda6166307c9eb395dcfaea4ff918c914050bcaa9ab717671b81c71b9b43
       build_date: '2024-11-21'
-      category: libtorrent
+      category: libtorrent 
+      build: 1build1
       tag: super-stable
       distribution:
       - bookworm
-    0.14.0-1build3:
+    0.14.0:
       checksum_sha256: 63db09c9583df64082472fb58811ce554b5252490db2ada3f4c7e8170520a5a2
       build_date: '2024-11-21'
-      category: libtorrent
+      category: libtorrent 
+      build: 1build1
       tag: stable
       distribution:
       - bookworm
-    0.15.1-1build1:
+    0.15.1:
       checksum_sha256: 22a9f0fa7cd6dc4b9897002c3f5a24ae75e1c1d4244ccc0babf6fbe25f765284
       build_date: '2025-03-08'
-      category: libtorrent
+      category: libtorrent 
+      build: 1build1
       tag: next
       distribution:
       - bookworm
   libtorrent-rasterbar-dev:
-    2.0.11-1.1build6:
+    2.0.11:
       checksum_sha256: 974b8e1debf58f879758387181c70c4a70b569dfef4817f97233fdee33e45407
       build_date: '2025-03-02'
-      category: libtorrent-rasterbar
+      category: libtorrent-rasterbar 
+      build: 1build1
       tag: stable
       distribution:
       - bookworm
   libtorrent-dev:
-    0.13.8-1build1:
+    0.13.8:
       checksum_sha256: 130ae917929d3d7407c0ce5f6f642883501ca2eab0097f786c6ef2cefc795ab3
       build_date: '2025-03-08'
-      category: libtorrent
+      category: libtorrent-dev
+      build: 1build1
       tag: super-stable
       distribution:
       - bookworm
-    0.14.0-1build1:
+    0.14.0:
       checksum_sha256: f9aa6ea1404f08617727d68b943accd0428e2a7f0ca084bc4534d9905c83b655
       build_date: '2025-03-08'
-      category: libtorrent
+      category: libtorrent-dev
+      build: 1build1
       tag: stable
       distribution:
       - bookworm
-    0.15.1-1build1:
+    0.15.1:
       checksum_sha256: 1081d6d78ca89822e0ea3832dc9e488c1c0b810016d71a99777f4125c42c04a7
       build_date: '2025-03-08'
-      category: libtorrent
+      category: libtorrent-dev
+      build: 1build1
       tag: next
       distribution:
       - bookworm
@@ -231,7 +260,7 @@ applications:
       dependencies:
       - mktorrent: stable
       - libudns: stable
-      - xmlrpc-c-advanced: next
+      - xmlrpc-c: next
       - libtorrent: stable
       - rtorrent: stable
     next:

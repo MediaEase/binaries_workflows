@@ -25,7 +25,7 @@ def save_yaml_if_changed(original_data, updated_data, yaml_path):
     else:
         print("Aucun changement détecté. Opération de sauvegarde ignorée.")
 
-def update_package_entry(manifest, package_id, checksum, build_date, package_version, category, tag=None):
+def update_package_entry(manifest, package_id, checksum, build_date, package_version, category, tag=None, build=None):
     """
     Met à jour ou ajoute une entrée de package dans le manifest en utilisant
     une structure plate, sans distinction runtime/development.
@@ -33,9 +33,9 @@ def update_package_entry(manifest, package_id, checksum, build_date, package_ver
     La structure attendue est :
     packages:
       <package_id>:
-        <version>: { checksum_sha256, build_date, category, tag, distribution }
+        <version>: { checksum_sha256, build_date, build, category, tag, distribution }
     """
-    print(f"Mise à jour de l'entrée pour le package '{package_id}', version '{package_version}'...")
+    print(f"Mise à jour de l'entrée pour le package '{package_id}', version '{package_version}', build '{build}'...")
     if 'packages' not in manifest or not isinstance(manifest['packages'], dict):
         manifest['packages'] = {}
         print("Clé 'packages' initialisée dans le manifest.")
@@ -47,11 +47,12 @@ def update_package_entry(manifest, package_id, checksum, build_date, package_ver
     manifest['packages'][package_id][package_version] = {
         'checksum_sha256': checksum,
         'build_date': build_date,
+        'build': build,
         'category': category,
         'tag': tag,  # Ce champ peut être None si non précisé
         'distribution': ['bookworm']
     }
-    print(f"Package '{package_id}', version '{package_version}' mis à jour.")
+    print(f"Package '{package_id}', version '{package_version}', build '{build}' mis à jour.")
 
 def update_application_entry(manifest, application_id, build_date, application_info):
     """
@@ -103,32 +104,41 @@ def main():
     if 'package_updates' in updates:
         print("Traitement des mises à jour de packages...")
         package_updates = updates['package_updates']
-        for package_id, package_info in package_updates.items():
-            checksum = package_info.get('checksum')
-            category = package_info.get('category')
-            package_version = package_info.get('version')
-            build_date = package_info.get('build_date')
-            tag = package_info.get('tag')  # Optionnel
-
-            if not checksum:
-                print(f"Erreur : aucun checksum fourni pour le package '{package_id}'.")
-                sys.exit(1)
-            if not package_version:
-                print(f"Erreur : aucune version fournie pour le package '{package_id}'.")
-                sys.exit(1)
-            if not build_date:
-                print(f"Erreur : aucune date de build fournie pour le package '{package_id}'.")
-                sys.exit(1)
-
-            update_package_entry(
-                manifest=updated_manifest,
-                package_id=package_id,
-                checksum=checksum,
-                build_date=build_date,
-                package_version=package_version,
-                category=category,
-                tag=tag
-            )
+        # Première boucle sur la catégorie (clé : libtorrent ou libtorrent-dev)
+        for category_key, versions in package_updates.items():
+            # Boucle sur chaque version dans la catégorie
+            for package_version, package_info in versions.items():
+                # Extraction des informations dans le niveau le plus profond
+                checksum = package_info.get('checksum_sha256')
+                package_id = package_info.get('package_id')
+                build_date = package_info.get('build_date')
+                tag = package_info.get('tag')
+                category = package_info.get('category')
+                build = package_info.get('build')
+                if package_id in ["libtorrent21", "libtorrent22", "libtorrent24"]:
+                    package_id = "libtorrent"
+                if not checksum:
+                    print(f"Erreur : aucun checksum fourni pour le package '{package_id}'.")
+                    sys.exit(1)
+                if not package_version:
+                    print(f"Erreur : aucune version fournie pour le package '{package_id}'.")
+                    sys.exit(1)
+                if not build_date:
+                    print(f"Erreur : aucune date de build fournie pour le package '{package_id}'.")
+                    sys.exit(1)
+                if not build:
+                    print(f"Erreur : aucun build fourni pour le package '{package_id}'.")
+                    sys.exit(1)
+                update_package_entry(
+                    manifest=updated_manifest,
+                    package_id=package_id,
+                    checksum=checksum,
+                    build_date=build_date,
+                    package_version=package_version,
+                    category=category,
+                    tag=tag,
+                    build=build
+                )
 
     # Traitement des mises à jour pour les applications
     if 'application_updates' in updates:

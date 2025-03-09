@@ -186,26 +186,52 @@ jobs:
           CURRENT_DATE: ${{ steps.libtorrent_update.outputs.CURRENT_DATE }}
           ARCHITECTURE: ${{ steps.libtorrent_update.outputs.ARCHITECTURE }}
           PACKAGING_DIR: ${{ steps.run_packaging.outputs.packaging_dir }}
-          PACKAGE_TAG: ${{ matrix.PACKAGE_TAG }}
+          PACKAGE_TAG: ${{ matrix.tag }}
         run: |
           set -e
           ARTIFACTS_DIR="${GITHUB_WORKSPACE}/artifacts"
           mkdir -p "$ARTIFACTS_DIR"
           for deb in $(find "${PACKAGING_DIR}" -type f -name "*.deb"); do
             fname=$(basename "$deb")
-            package_id="${fname%%_*}"
-            echo "Processing $fname (package: $package_id)"
+            base_fname="${fname%_amd64.deb}"
+            IFS='_' read -r package_field _ <<< "$base_fname"
+            if [[ "$package_field" =~ ^(.*)-((stable|next|super-stable))$ ]]; then
+              package_id="${BASH_REMATCH[1]}"
+              package_id="${package_id%-super}"
+              if [ "$package_id" == "libtorrent-dev" ]; then
+                category="libtorrent-dev"
+              else
+                category="libtorrent"
+              fi
+            fi
+            tag="$PACKAGE_TAG"
+            version_regex="^([^'-]+)-(.+)$"
+            if [[ "$FULL_VERSION" =~ $version_regex ]]; then
+              version="${BASH_REMATCH[1]}"
+              build="${BASH_REMATCH[2]}"
+            fi
+            echo "Processing $fname (package_id:$package_id, version:$version, build:$build, tag:$tag)"
             checksum=$(sha256sum "$deb" | awk '{print $1}')
-            json_file="${package_id}.json"
-            jq -n --arg package_id "$package_id" --arg version "$FULL_VERSION" --arg checksum_sha256 "$checksum" --arg build_date "$CURRENT_DATE" --arg tag "$PACKAGE_TAG" '{
-              package_id: $package_id,
-              version: $version,
-              checksum_sha256: $checksum_sha256,
-              build_date: $build_date,
-              category: "libtorrent",
-              tag: $tag,
-              distribution: ["bookworm"]
-            }' > "$json_file"
+            json_file="${package_id}-${tag}.json"
+            jq -n \
+              --arg package_id "$package_id" \
+              --arg version "$version" \
+              --arg build "$build" \
+              --arg checksum_sha256 "$checksum" \
+              --arg build_date "$CURRENT_DATE" \
+              --arg category "$category" \
+              --arg tag "$tag" \
+              --argjson distribution '["bookworm"]' \
+              '{
+                package_id: $package_id,
+                version: $version,
+                build: $build,
+                checksum_sha256: $checksum_sha256,
+                build_date: $build_date,
+                category: $category,
+                tag: $tag,
+                distribution: $distribution
+              }' > "$json_file"
             pkg_artifact_dir="$ARTIFACTS_DIR/$package_id"
             mkdir -p "$pkg_artifact_dir"
             cp "$json_file" "$pkg_artifact_dir/"
@@ -275,10 +301,12 @@ jobs:
           commit_description=""
           for json_file in $(find "${output_dir}" -type f -name "*.json"); do
             package_data=$(cat "${json_file}")
-            package_name=$(echo "${package_data}" | jq -r '.package_name')
+            package_name=$(echo "${package_data}" | jq -r '.package_id')
+            package_tag=$(echo "${package_data}" | jq -r '.tag')
+            full_package_name="${package_name}-${package_tag}"
             package_version=$(echo "${package_data}" | jq -r '.version')
             commit_description="${commit_description}
-            - ${package_name} updated to ${package_version}"
+            - ${full_package_name} updated to ${package_version}"
           done
           commit_message="Update libtorrent packages [automated]"
           echo "Commit message is:"
@@ -326,11 +354,14 @@ jobs:
           set -e
           output_dir="${{ github.workspace }}/outputs"
           manifest_updates="{\"package_updates\": {}}"
-          find "${output_dir}" -type f -name "*.tar.gz" -execdir tar -xzf "{}" \;
+          find "${output_dir}" -type f -name "*.tar.gz" -exec tar -xzf "{}" -C "${output_dir}" \;
           for json_file in $(find "${output_dir}" -type f -name "*.json"); do
             package_data=$(cat "${json_file}")
-            package_name=$(echo "${package_data}" | jq -r '.package_name')
-            manifest_updates=$(echo "${manifest_updates}" | jq ".package_updates += {\"${package_name}\": ${package_data}}")
+            category=$(echo "$package_data" | jq -r '.category')
+            version=$(echo "$package_data" | jq -r '.version')
+            manifest_updates=$(echo "${manifest_updates}" | jq --arg cat "$category" --arg ver "$version" --argjson pkg "$package_data" '
+              .package_updates[$cat] |= (. // {}) | .package_updates[$cat] += {($ver): $pkg}
+            ')
           done
           echo "${manifest_updates}" > "${output_dir}/manifest_updates.json"
           echo "manifest_updates<<EOF" >> $GITHUB_OUTPUT

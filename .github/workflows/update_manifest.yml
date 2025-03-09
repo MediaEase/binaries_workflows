@@ -35,34 +35,38 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install pyyaml yamllint
-
+          
       - name: Extract Package Data
         id: extract_package_data
         run: |
-          set -e
-          manifest=$(echo '${{ toJson(github.event.client_payload) }}' | jq -c '.packages_updates')
-          echo "Extracting package data from manifest..."
-          package_names=()
-          package_versions=()
-          for type in $(echo "$manifest" | jq -r 'keys[]'); do
-            for pkg in $(echo "$manifest" | jq -r ".[$type] | keys[]"); do
-              for ver in $(echo "$manifest" | jq -r ".[$type][$pkg] | keys[]"); do
-                echo "Found package: $pkg, version: $ver, type: $type"
-                package_names+=("$pkg")
-                package_versions+=("$ver")
+            set -e
+            manifest_file=$(echo "$payload" | jq -c '.package_updates')
+            echo "$manifest_file" > manifest.json
+            manifest=$(cat manifest.json)
+            echo "Manifest brut : $manifest"
+            echo "Extracting package data from manifest..."
+            package_names=()
+            package_versions=()
+            for pkg in $(echo "$manifest" | jq -r 'keys[]'); do
+              for version in $(echo "$manifest" | jq -r --arg pkg "$pkg" '.[$pkg] | keys[]'); do
+                tag=$(echo "$manifest" | jq -r --arg pkg "$pkg" --arg version "$version" '.[$pkg][$version].tag')
+                package_name_tag_version="${pkg}-${tag}_${version}"
+                echo "Found package: $package_name_tag_version"
+                package_names+=("$package_name_tag_version")
+                package_versions+=("$version")
               done
             done
-          done
-          package_names_json=$(printf '%s\n' "${package_names[@]}" | jq -R . | jq -s -c .)
-          package_versions_json=$(printf '%s\n' "${package_versions[@]}" | jq -R . | jq -s -c .)
-          echo "Including all packages (runtime and development)..."
-          echo "package_names<<EOF" >> $GITHUB_OUTPUT
-          echo "${package_names_json}" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          echo "package_versions<<EOF" >> $GITHUB_OUTPUT
-          echo "${package_versions_json}" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
+            package_names_json=$(printf '%s\n' "${package_names[@]}" | jq -R . | jq -s -c .)
+            package_versions_json=$(printf '%s\n' "${package_versions[@]}" | jq -R . | jq -s -c .)
+            echo "Including all packages (runtime and development)..."
+            echo "package_names<<EOF" >> $GITHUB_OUTPUT
+            echo "${package_names_json}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "package_versions<<EOF" >> $GITHUB_OUTPUT
+            echo "${package_versions_json}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            rm manifest.json
+        
       - name: Update manifest.yaml
         id: update_manifest
         run: |
