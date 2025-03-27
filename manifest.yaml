@@ -189,24 +189,24 @@ packages:
       - bookworm
   libtorrent:
     0.13.8:
-      checksum_sha256: 14ab908592c5dcd1e967f63981d286e966a8523eebba457ba919e88c9a744de2
-      build_date: '2025-03-25'
+      checksum_sha256: 41183e8ba28e6623506c9309f5030900722065eb89c57c3f96dd3dcab720887a
+      build_date: '2025-03-27'
       build: 1build1
       category: libtorrent
       tag: super-stable
       distribution:
       - bookworm
     0.14.0:
-      checksum_sha256: c35b80177228a9c5aa16abbcccebc56ee8dee2c91f5e1ab8682cde2e2a40919f
-      build_date: '2025-03-25'
+      checksum_sha256: adc9ca359f1a31bfd4c826d7b0c1ef2c905c97a7418fc38a0e58c233fe28456d
+      build_date: '2025-03-27'
       build: 1build1
       category: libtorrent
       tag: stable
       distribution:
       - bookworm
     0.15.1:
-      checksum_sha256: 192b1d61d35db69df5fc97e3868abb92cc5d42721d1e607afab12c1f2d56c9c3
-      build_date: '2025-03-25'
+      checksum_sha256: bd337d4c9d1189104f915af32ea232239a55f23fd24c3bc944e79bae1fbbb68c
+      build_date: '2025-03-27'
       build: 1build1
       category: libtorrent
       tag: next
@@ -223,24 +223,24 @@ packages:
       - bookworm
   libtorrent-dev:
     0.13.8:
-      checksum_sha256: aaf1588563fca728de7f5b6f2e53288fbc055ed2ad44e32f53a81d6dc0c1aa39
-      build_date: '2025-03-25'
+      checksum_sha256: e05ae48645c677bf091387df9711f12723146b09b3a6be86c7b0617666e18bc2
+      build_date: '2025-03-27'
       build: 1build1
       category: libtorrent-dev
       tag: super-stable
       distribution:
       - bookworm
     0.14.0:
-      checksum_sha256: fd3bc19f08175cb5f27ef9509f816d394fa7131ea44113242f654058cdb0701e
-      build_date: '2025-03-25'
+      checksum_sha256: ae8e4098888309e1efcc68e6e68b51162fe0d0d7be8430829f6c759fc6be6c39
+      build_date: '2025-03-27'
       build: 1build1
       category: libtorrent-dev
       tag: stable
       distribution:
       - bookworm
     0.15.1:
-      checksum_sha256: ae42313cfe814e784ce26c5f445ca7df3f4f6e5133bdb240ff43a8444a21a2bd
-      build_date: '2025-03-25'
+      checksum_sha256: c4343b691cb3628c59e9730ed15eb051e8dbeaa6852a3871b0a18c2f8941fd12
+      build_date: '2025-03-27'
       build: 1build1
       category: libtorrent-dev
       tag: next
